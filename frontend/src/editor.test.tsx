@@ -483,6 +483,37 @@ describe("Lookup editor validation", () => {
     fireEvent.click(screen.getByText("Save record"));
     await waitFor(() => expect(save).toHaveBeenLastCalledWith({ name: "123-456" }));
   });
+  it("uses generated regex validity for numeric textarea mask positions", () => {
+    render(
+      <RecordEditor
+        columns={[{ ...columns[1], name: "notes", nullable: true }]}
+        fields={[
+          {
+            name: "notes",
+            label: "Masked notes",
+            section: "",
+            order: 0,
+            hidden: false,
+            readOnly: false,
+            widget: "textarea",
+            mask: { pattern: "##-##" },
+          },
+        ]}
+        row={null}
+        close={() => {}}
+        save={async () => {}}
+      />,
+    );
+    const textarea = screen.getByLabelText("Masked notes") as HTMLTextAreaElement;
+    expect(textarea.getAttribute("pattern")).toBe(
+      "[0-9][0-9]\\x2d[0-9][0-9]",
+    );
+    fireEvent.change(textarea, { target: { value: "1A-23" } });
+    expect(textarea.checkValidity()).toBe(false);
+    fireEvent.change(textarea, { target: { value: "12-23" } });
+    expect(textarea.checkValidity()).toBe(true);
+  });
+
 });
 
 describe("Date, timestamp and dropdown controls", () => {
