@@ -105,7 +105,7 @@ public partial class ApiTests
                 [field],
                 new() { ["code"] = JsonSerializer.SerializeToElement(valid) }
             );
-        foreach (var invalid in new[] { "A1-12", "AB-", "AB_12", "AB-123" })
+        foreach (var invalid in new[] { "A1-12", "AB-", "AB_12", "AB-123", "AB-１2", "AB-١2" })
             Assert.Throws<ApiError>(() =>
                 LayoutRules.ValidateMaskValues(
                     [field],

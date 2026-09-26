@@ -837,6 +837,13 @@ test("data type rules block invalid creates and updates", async ({
   await typeDialog.getByLabel("Data type label").fill("Secondary");
   await typeDialog.getByRole("button", { name: "Save data type" }).click();
   await expect(typeDialog).toHaveCount(0);
+  const datatypeDefault = page.getByLabel("datatype default value");
+  await expect(datatypeDefault).toBeVisible();
+  await expect(datatypeDefault.locator("option")).toHaveText(["Default", "Secondary"]);
+  await datatypeDefault.selectOption("secondary");
+  await expect(datatypeDefault).toHaveValue("secondary");
+  await datatypeDefault.selectOption("default");
+  await expect(datatypeDefault).toHaveValue("default");
 
   // Saving the first data type provisions the managed datatype column. The
   // editor must use that new schema version without requiring a page reload.
@@ -857,8 +864,6 @@ test("data type rules block invalid creates and updates", async ({
   await fieldDialog.getByRole("button", { name: "Save field" }).click();
   await expect(fieldDialog).toHaveCount(0);
 
-  await dataTypes.getByLabel("Set Secondary as default").click();
-  await dataTypes.getByLabel("Set Default as default").click();
   await dataTypes.getByRole("button", { name: "Default", exact: true }).click();
   await dataTypes.getByLabel("Configure title for Default").click();
   let typeFieldDialog = page.getByRole("dialog", {
@@ -906,17 +911,21 @@ test("data type rules block invalid creates and updates", async ({
   await page.getByRole("button", { name: "Add record", exact: true }).click();
   let dialog = page.getByRole("dialog");
   await expect(dialog.getByText(/Required format: Format: AA-##\?/)).toBeVisible();
+  const noteInput = dialog.getByLabel("note", { exact: true });
+  await expect(noteInput).toHaveAttribute(
+    "pattern",
+    "[A-Za-z][A-Za-z]\\x2d[0-9](?:[0-9])?",
+  );
   await dialog.getByLabel("title", { exact: true }).fill("   ");
-  await dialog.getByLabel("note", { exact: true }).fill("AB_123");
+  await noteInput.fill("AB-1");
   await dialog.getByRole("button", { name: "Save record" }).click();
   await expect(dialog.getByRole("alert")).toContainText("title is required.");
   const title = "Required browser " + Date.now();
   await dialog.getByLabel("title", { exact: true }).fill(title);
-  await dialog.getByRole("button", { name: "Save record" }).click();
-  await expect(dialog.getByRole("alert")).toContainText(
-    "note must match the input mask.",
-  );
-  await dialog.getByLabel("note", { exact: true }).fill("AB-1");
+  await noteInput.fill("AB_1");
+  expect(await noteInput.evaluate((input: HTMLInputElement) => input.validity.patternMismatch)).toBe(true);
+  await noteInput.fill("AB-1");
+  expect(await noteInput.evaluate((input: HTMLInputElement) => input.validity.patternMismatch)).toBe(false);
   await dialog.getByRole("button", { name: "Save record" }).click();
   await expect(dialog).toHaveCount(0);
   const row = page

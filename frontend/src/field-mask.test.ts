@@ -3,6 +3,7 @@ import {
   maskConfigurationError,
   maskMaximumLength,
   maskMinimumLength,
+  maskRegexPattern,
   maskValueError,
 } from "./field-mask";
 
@@ -15,6 +16,9 @@ describe("exact field masks", () => {
     expect(maskValueError(mask, "AB-12")).toBeNull();
     expect(maskValueError(mask, "AB-")).not.toBeNull();
     expect(maskValueError(mask, "A1-12")).not.toBeNull();
+    expect(maskRegexPattern(mask)).toBe(
+      "[A-Za-z][A-Za-z]\\x2d[0-9](?:[0-9])?",
+    );
   });
 
   it("allows optional literals without greedy position loss", () => {
@@ -55,5 +59,11 @@ describe("numbers-only field masks", () => {
     expect(maskValueError(mask, "123456")).toBeNull();
     expect(maskValueError(mask, "12A456")).not.toBeNull();
     expect(maskValueError(mask, "12-456")).not.toBeNull();
+    expect(maskRegexPattern(mask)).toBe("[0-9]{1,}");
+    const regex = new RegExp("^(?:" + maskRegexPattern(mask) + ")$");
+    expect(regex.test("123456")).toBe(true);
+    expect(regex.test("12A456")).toBe(false);
+    expect(regex.test("１２３")).toBe(false);
+    expect(regex.test("١٢٣")).toBe(false);
   });
 });

@@ -910,6 +910,47 @@ export function ObjectEditor({
                     </tr>
                   </thead>
                   <tbody>
+                    {dataTypes.length > 0 && (() => {
+                      const managedColumn = schema.columns.find(
+                        (column) => column.name === "datatype",
+                      );
+                      return (
+                        <tr key="datatype">
+                          <td>
+                            datatype <span className="badge">Managed</span>
+                          </td>
+                          <td>
+                            <strong>{managedColumn?.sqlType || "varchar(64)"}</strong>
+                            <small className="muted database-field-details">
+                              {managedColumn
+                                ? "Required in database"
+                                : "Provisioned when object settings are saved"}
+                            </small>
+                          </td>
+                          <td>Data type</td>
+                          <td>Yes</td>
+                          <td>
+                            <select
+                              aria-label="datatype default value"
+                              value={defaultDataTypeKey}
+                              disabled={busy || objectLoading}
+                              onChange={(event) =>
+                                void saveDataTypes(dataTypes, event.target.value)
+                              }
+                            >
+                              {dataTypes.map((dataType) => (
+                                <option key={dataType.key} value={dataType.key}>
+                                  {dataType.label}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <small className="muted">Managed by Data Types.</small>
+                          </td>
+                        </tr>
+                      );
+                    })()}
                     {objectFields.map((field) => {
                       const column = columns.find((c) => c.name === field.name);
                       const schemaColumn = schema.columns.find(

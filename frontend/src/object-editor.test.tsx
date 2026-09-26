@@ -22,7 +22,7 @@ const definition = { fields: [
   { name: "title", label: "Title", readOnly: false, widget: "text" },
 ], view: {} };
 
-function mockApi(objectDefinition = definition) {
+function mockApi(objectDefinition: unknown = definition) {
   vi.mocked(api).mockImplementation(async (url, method = "GET") => {
     if (url === "/connections/1/tables") return ["things"] as never;
     if (url.includes("/schema/tables/things")) return schema as never;
@@ -104,6 +104,8 @@ describe("Object field workflow", () => {
   it("moves required and mask controls into the default data type", async () => {
     mockApi({
       ...definition,
+      dataTypes: undefined as never,
+      defaultDataTypeKey: undefined as never,
       fields: definition.fields.map((field) =>
         field.name === "title"
           ? { ...field, required: true, mask: { pattern: "AA-##?" } }
@@ -228,6 +230,49 @@ describe("Object field workflow", () => {
         dataTypes: expect.arrayContaining([expect.objectContaining({ key: "invoice", label: "Invoice" })]),
       }),
     );
+  });
+
+  it("shows the managed datatype column and saves and reopens its selected default", async () => {
+    mockApi({
+      ...definition,
+      dataTypes: [
+        { key: "default", label: "Default", fields: definition.fields.map((field) => ({ name: field.name, required: false, mask: null, overrideDropdownOptions: false, enabledOptionKeys: [] })) },
+        { key: "premium", label: "Premium", fields: definition.fields.map((field) => ({ name: field.name, required: false, mask: null, overrideDropdownOptions: false, enabledOptionKeys: [] })) },
+      ],
+      defaultDataTypeKey: "default",
+    });
+    render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
+
+    await screen.findByText("varchar(100)");
+    expect(screen.getByText("Managed")).toBeTruthy();
+    expect(screen.getByText("Provisioned when object settings are saved")).toBeTruthy();
+    const select = screen.getByLabelText("datatype default value") as HTMLSelectElement;
+    expect(select.value).toBe("default");
+    expect(Array.from(select.options).map((option) => [option.value, option.text])).toEqual([
+      ["default", "Default"],
+      ["premium", "Premium"],
+    ]);
+
+    fireEvent.change(select, { target: { value: "premium" } });
+    await waitFor(() => expect(select.value).toBe("premium"));
+    expect(api).toHaveBeenCalledWith(
+      "/admin/connections/1/tables/things/object",
+      "PUT",
+      expect.objectContaining({ defaultDataTypeKey: "premium" }),
+    );
+
+    cleanup();
+    mockApi({
+      ...definition,
+      dataTypes: [
+        { key: "default", label: "Default", fields: definition.fields.map((field) => ({ name: field.name, required: false, mask: null, overrideDropdownOptions: false, enabledOptionKeys: [] })) },
+        { key: "premium", label: "Premium", fields: definition.fields.map((field) => ({ name: field.name, required: false, mask: null, overrideDropdownOptions: false, enabledOptionKeys: [] })) },
+      ],
+      defaultDataTypeKey: "premium",
+    });
+    render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
+    await screen.findByText("varchar(100)");
+    expect((screen.getByLabelText("datatype default value") as HTMLSelectElement).value).toBe("premium");
   });
 
   it("creates new object fields as nullable and represents them in every data type", async () => {

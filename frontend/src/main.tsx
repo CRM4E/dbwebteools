@@ -48,6 +48,7 @@ import { PageEditor } from "./page-editor";
 import {
   maskMaximumLength,
   maskMinimumLength,
+  maskRegexPattern,
   maskTip,
   maskValueError,
 } from "./field-mask";
@@ -1290,6 +1291,23 @@ export function RecordEditor({
                           ? maskMinimumLength(l.mask)
                           : undefined
                       }
+                      pattern={
+                        l?.mask && (!row || values[c.name] !== row.values[c.name])
+                          ? maskRegexPattern(l.mask)
+                          : undefined
+                      }
+                      onInvalid={(event) => {
+                        if (
+                          l?.mask &&
+                          (!row || values[c.name] !== row.values[c.name]) &&
+                          maskRegexPattern(l.mask)
+                        ) {
+                          event.preventDefault();
+                          setError(
+                            `${l.label || c.name} must match the input mask. ${maskTip(l.mask)}`,
+                          );
+                        }
+                      }}
                       title={l?.mask ? maskTip(l.mask) : undefined}
                       type={
                         widget === "date"
