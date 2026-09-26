@@ -407,6 +407,7 @@ test("date/time and keyed dropdown layouts preserve values and enforce unique op
   await statusDialog.getByRole("button", { name: "Save field" }).click();
   await expect(statusDialog).toHaveCount(0);
   const dataTypes = page.getByLabel("Data types");
+  await dataTypes.getByRole("button", { name: "Default", exact: true }).click();
   await dataTypes.getByLabel("Configure status for Default").click();
   const statusTypeDialog = page.getByRole("dialog", {
     name: "Data type field settings",
@@ -888,6 +889,7 @@ test("data type rules block invalid creates and updates", async ({
     .getByRole("combobox", { name: "Table", exact: true })
     .selectOption("z_required_records");
   const reloadedTypes = page.getByLabel("Data types");
+  await reloadedTypes.getByRole("button", { name: "Default", exact: true }).click();
   await reloadedTypes.getByLabel("Configure title for Default").click();
   typeFieldDialog = page.getByRole("dialog", { name: "Data type field settings" });
   await expect(typeFieldDialog.getByLabel("Required", { exact: true })).toBeChecked();
