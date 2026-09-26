@@ -422,6 +422,7 @@ describe("Lookup editor validation", () => {
     const masked = screen.getByLabelText("Reference code") as HTMLInputElement;
     expect(masked.minLength).toBe(-1);
     expect(masked.maxLength).toBe(-1);
+    expect(masked.pattern).toBe("");
     fireEvent.change(screen.getByLabelText("notes"), {
       target: { value: "After" },
     });
@@ -458,7 +459,14 @@ describe("Lookup editor validation", () => {
     const input = screen.getByLabelText("Reference code") as HTMLInputElement;
     expect(input.minLength).toBe(6);
     expect(input.maxLength).toBe(7);
+    expect(input.pattern).toBe("[0-9][0-9][0-9]\\x2d[0-9][0-9](?:[0-9])?");
     expect(input.getAttribute("aria-describedby")).toBe("mask-tip-name");
+    fireEvent.change(input, { target: { value: "12A-45" } });
+    expect(input.checkValidity()).toBe(false);
+    fireEvent.change(input, { target: { value: "１２３-45" } });
+    expect(input.checkValidity()).toBe(false);
+    fireEvent.change(input, { target: { value: "123-45" } });
+    expect(input.checkValidity()).toBe(true);
     fireEvent.change(input, { target: { value: "123_45" } });
     fireEvent.click(screen.getByText("Save record"));
     await waitFor(() =>

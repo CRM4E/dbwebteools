@@ -97,6 +97,26 @@ export function maskMaximumLength(mask: InputMask): number | undefined {
   return exactTokens(mask.pattern).tokens?.length;
 }
 
+// HTML pattern expressions are generated from the bounded mask grammar; mask
+// authors never provide arbitrary regular expressions.
+export function maskRegexPattern(mask: InputMask): string | undefined {
+  if (mask.pattern == null) {
+    return mask.characterSet === "digits" && !(mask.requiredCharacters || "")
+      ? `[0-9]{${mask.minimumLength ?? 1},}`
+      : undefined;
+  }
+  const tokens = exactTokens(mask.pattern).tokens;
+  if (!tokens) return undefined;
+  return tokens.map((token) => {
+    const atom =
+      token.kind === "digit" ? "[0-9]"
+      : token.kind === "letter" ? "[A-Za-z]"
+      : token.kind === "alphanumeric" ? "[A-Za-z0-9]"
+      : `\\x${token.literal!.charCodeAt(0).toString(16).padStart(2, "0")}`;
+    return token.required ? atom : `(?:${atom})?`;
+  }).join("");
+}
+
 function exactMaskMatches(tokens: ExactToken[], value: string): boolean {
   let positions = new Set([0]);
   for (const token of tokens) {
