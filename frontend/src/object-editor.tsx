@@ -5,6 +5,7 @@ import {
   type Connection,
   type ObjectDefinition,
   type ObjectField,
+  type DataTypeDefinition,
   type Field,
   type ListView,
 } from "./api";
@@ -15,11 +16,7 @@ import { LookupConfiguration } from "./lookups";
 import { CreationDefaultEditor } from "./creation-defaults";
 import { FormulaValidator } from "./formula-validator";
 import { SumupConfiguration } from "./sumups";
-import {
-  maskConfigurationError,
-  maskMaximumLength,
-  maskTip,
-} from "./field-mask";
+import { DataTypesEditor, normalizeDataTypes, reconcileDataTypes } from "./data-types";
 
 type SchemaColumn = {
   name: string;
@@ -61,6 +58,12 @@ const blank = (): Draft => ({
   relatedKey: "",
   displayColumn: "",
 });
+const canonicalObjectFields = (fields: ObjectField[]) => fields.map((field) => {
+  const canonical = { ...field };
+  delete canonical.required;
+  delete canonical.mask;
+  return canonical;
+});
 const kind = (c: SchemaColumn) =>
   ({
     varchar: "text",
@@ -85,6 +88,8 @@ export function ObjectEditor({
   const [schema, setSchema] = useState<Schema | null>(null),
     [target, setTarget] = useState<Schema | null>(null),
     [objectFields, setObjectFields] = useState<ObjectField[]>([]),
+    [dataTypes, setDataTypes] = useState<DataTypeDefinition[]>([]),
+    [defaultDataTypeKey, setDefaultDataTypeKey] = useState(""),
     [objectView, setObjectView] = useState<ListView>({}),
     [objectLoading, setObjectLoading] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null),
@@ -130,6 +135,8 @@ export function ObjectEditor({
     setSchema(null);
     setDraft(null);
     setObjectFields([]);
+    setDataTypes([]);
+    setDefaultDataTypeKey("");
     setObjectView({});
     setError("");
     setLoading(true);
@@ -143,8 +150,15 @@ export function ObjectEditor({
       ])
         .then(([nextSchema, object]) => {
           if (active) {
+            const normalized = normalizeDataTypes(
+              object.fields,
+              object.dataTypes,
+              object.defaultDataTypeKey,
+            );
             setSchema(nextSchema);
-            setObjectFields(object.fields);
+            setObjectFields(canonicalObjectFields(object.fields));
+            setDataTypes(normalized.dataTypes);
+            setDefaultDataTypeKey(normalized.defaultDataTypeKey);
             setObjectView(object.view || {});
           }
         })
@@ -191,6 +205,39 @@ export function ObjectEditor({
       onChanged();
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function saveDataTypes(
+    nextDataTypes: DataTypeDefinition[],
+    nextDefaultDataTypeKey: string,
+  ) {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      await api(
+        `/admin/connections/${connection}/tables/${encodeURIComponent(table)}/object`,
+        "PUT",
+        {
+          fields: canonicalObjectFields(objectFields),
+          dataTypes: nextDataTypes,
+          defaultDataTypeKey: nextDefaultDataTypeKey,
+          view: objectView,
+        },
+      );
+      const nextSchema = await api<Schema>(
+        `${base}/tables/${encodeURIComponent(table)}`,
+      );
+      setSchema(nextSchema);
+      setDataTypes(nextDataTypes);
+      setDefaultDataTypeKey(nextDefaultDataTypeKey);
+      setMessage("Data types updated.");
+      onChanged();
+    } catch (reason) {
+      setError((reason as Error).message);
+      throw reason;
     } finally {
       setBusy(false);
     }
@@ -246,16 +293,6 @@ export function ObjectEditor({
       datetime: "datetime",
       lookup: "relation",
     })[widget] || "text";
-  const fieldMaskError = fieldDraft?.mask
-    ? maskConfigurationError(fieldDraft.mask) ||
-      ((editing ? draft?.type : databaseType(fieldDraft.widget)) === "text" &&
-      draft &&
-      (maskMaximumLength(fieldDraft.mask) ||
-        fieldDraft.mask.minimumLength ||
-        1) > draft.length
-        ? "The input mask cannot exceed the database field length."
-        : null)
-    : null;
   const closeFieldDialog = () => {
     if (pendingVirtual && fieldDraft)
       setObjectFields((old) =>
@@ -470,16 +507,23 @@ export function ObjectEditor({
               const savedField = fieldDraft.widget === "lookup" && !editing
                 ? { ...fieldDraft, lookup: { table: draft.relatedTable, keyColumn: draft.relatedKey, displayColumn: draft.displayColumn, searchColumns: [] } }
                 : fieldDraft;
-              const nextFields = editing
+              const nextFields = canonicalObjectFields(editing
                 ? objectFields.map((field) => field.name === savedField.name ? savedField : field)
-                : [...objectFields, savedField];
+                : [...objectFields, savedField]);
+              const nextDataTypes = reconcileDataTypes(dataTypes, nextFields);
               await api(
                 `/admin/connections/${connection}/tables/${encodeURIComponent(table)}/object`,
                 "PUT",
-                { fields: nextFields, view: objectView },
+                {
+                  fields: nextFields,
+                  dataTypes: nextDataTypes,
+                  defaultDataTypeKey,
+                  view: objectView,
+                },
               );
               setSchema(result);
               setObjectFields(nextFields);
+              setDataTypes(nextDataTypes);
               setDraft(null);
               setFieldDraft(null);
               setPendingVirtual(false);
@@ -536,10 +580,6 @@ export function ObjectEditor({
                     sumup: widget === "sumup" ? fieldDraft.sumup : undefined,
                     creationDefault: widget === "sumup" ? null : fieldDraft.creationDefault,
                     readOnly: widget === "sumup" || fieldDraft.readOnly,
-                    required: widget === "sumup" ? false : fieldDraft.required,
-                    mask: ["text", "textarea"].includes(widget)
-                      ? fieldDraft.mask
-                      : null,
                   });
                   if (widget === "sumup") patch({ nullable: true });
                   if (widget === "email")
@@ -649,121 +689,30 @@ export function ObjectEditor({
                 checked={fieldDraft.readOnly}
                 disabled={busy || ["join", "formula", "sumup"].includes(fieldDraft.widget)}
                 onChange={(e) => {
-                  patchField({
-                    readOnly: e.target.checked,
-                    required: e.target.checked ? false : fieldDraft.required,
-                    mask: e.target.checked ? null : fieldDraft.mask,
-                  });
-                  if (e.target.checked && fieldDraft.required)
-                    patch({ nullable: true });
+                  patchField({ readOnly: e.target.checked });
                 }}
               />
               Read-only
             </label>
-            <label className="check">
-              <input
-                type="checkbox"
-                aria-label={`${fieldDraft.name} required`}
-                checked={!!fieldDraft.required}
-                disabled={busy || fieldDraft.readOnly || ["join", "formula", "sumup"].includes(fieldDraft.widget)}
-                onChange={(e) => {
-                  patchField({ required: e.target.checked });
-                  patch({ nullable: !e.target.checked });
-                }}
-              />
-              Required
-            </label>
           </div>
-          {!fieldDraft.readOnly && ["text", "textarea"].includes(fieldDraft.widget) && (
-            <div className="lookup-config" aria-label="Input mask configuration">
-              <h3>Input mask</h3>
-              <div className="form-grid">
-                <label>
-                  Pattern
-                  <input
-                    aria-label="Input mask pattern"
-                    aria-describedby={
-                      fieldDraft.mask
-                        ? "input-mask-pattern-help input-mask-status"
-                        : "input-mask-pattern-help"
-                    }
-                    aria-invalid={!!fieldMaskError}
-                    maxLength={1024}
-                    placeholder="For example: AA-###"
-                    disabled={busy}
-                    value={fieldDraft.mask?.pattern || ""}
-                    onChange={(event) => {
-                      const pattern = event.target.value;
-                      patchField({ mask: pattern ? { pattern } : null });
-                    }}
-                  />
-                </label>
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    aria-label="Numbers only"
-                    checked={
-                      fieldDraft.mask?.pattern == null &&
-                      fieldDraft.mask?.characterSet === "digits" &&
-                      (fieldDraft.mask?.minimumLength ?? 1) === 1 &&
-                      !(fieldDraft.mask?.requiredCharacters || "")
-                    }
-                    disabled={busy}
-                    onChange={(event) =>
-                      patchField({
-                        mask: event.target.checked
-                          ? {
-                              characterSet: "digits",
-                              minimumLength: 1,
-                              requiredCharacters: "",
-                            }
-                          : null,
-                      })
-                    }
-                  />
-                  Numbers only
-                </label>
-              </div>
-              <p id="input-mask-pattern-help" className="muted">
-                # number · A letter · X letter or number · add ? after any
-                position to make it optional · use \ before #, A, X, ?, or \
-                to make it literal.
-              </p>
-              {fieldDraft.mask && (
-                <>
-                  {fieldDraft.mask.pattern == null &&
-                    !(
-                      fieldDraft.mask.characterSet === "digits" &&
-                      (fieldDraft.mask.minimumLength ?? 1) === 1 &&
-                      !(fieldDraft.mask.requiredCharacters || "")
-                    ) && (
-                    <p className="muted">
-                      Existing custom rule: {maskTip(fieldDraft.mask)} Replace it
-                      by entering a pattern or selecting Numbers only.
-                    </p>
-                  )}
-                  <p
-                    id="input-mask-status"
-                    className={fieldMaskError ? "alert" : "muted"}
-                    role={fieldMaskError ? "alert" : undefined}
-                  >
-                    {fieldMaskError || `User tip: ${maskTip(fieldDraft.mask)}`}
-                  </p>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy}
-                    onClick={() => patchField({ mask: null })}
-                  >
-                    Remove input mask
-                  </button>
-                </>
-              )}
-            </div>
-          )}
           {!['join', 'formula'].includes(fieldDraft.widget) && (
             <CreationDefaultEditor
-              field={{ ...fieldDraft, section: "", order: 0, hidden: false, showInList: true }}
+              field={{
+                ...fieldDraft,
+                section: "",
+                order: 0,
+                hidden: false,
+                showInList: true,
+                required: dataTypes
+                  .find((dataType) => dataType.key === defaultDataTypeKey)
+                  ?.fields.find((setting) => setting.name === fieldDraft.name)?.required,
+                enabledOptionKeys: (() => {
+                  const setting = dataTypes
+                    .find((dataType) => dataType.key === defaultDataTypeKey)
+                    ?.fields.find((item) => item.name === fieldDraft.name);
+                  return setting?.overrideDropdownOptions ? setting.enabledOptionKeys : null;
+                })(),
+              }}
               column={draftColumn}
               change={(creationDefault) => patchField({ creationDefault })}
             />
@@ -897,9 +846,8 @@ export function ObjectEditor({
           )}
           {!editing && (
             <p className="muted">
-              For a table with existing records, create the field without
-              marking it required, populate it, then edit it and mark it
-              required.
+              Field requirements and input masks are configured separately for
+              each data type.
             </p>
           )}
           <div className="form-actions">
@@ -914,7 +862,6 @@ export function ObjectEditor({
               className="primary"
               disabled={
                 busy ||
-                !!fieldMaskError ||
                 (fieldDraft.widget === "dropdown" &&
                   !!dropdownError(fieldDraft.options || []))
               }
@@ -958,7 +905,6 @@ export function ObjectEditor({
                       <th>Database definition</th>
                       <th>Control / behavior</th>
                       <th>Read-only</th>
-                      <th>Required</th>
                       <th>Creation default</th>
                       <th>Actions</th>
                     </tr>
@@ -1006,15 +952,12 @@ export function ObjectEditor({
                             {field.readOnly ? "Yes" : "No"}
                           </td>
                           <td>
-                            {field.required ? "Yes" : "No"}
-                          </td>
-                          <td>
                             {field.creationDefault ? "Configured" : "—"}
                           </td>
                           <td>
                             <div className="actions">
                                 <button
-                                  disabled={busy}
+                                  disabled={busy || field.name === "datatype"}
                                   title={schemaColumn?.editBlocked || "Edit field"}
                                   aria-label={`Edit field ${field.name}`}
                                   onClick={() => {
@@ -1022,7 +965,7 @@ export function ObjectEditor({
                                       ...blank(),
                                       name: field.name,
                                       type: schemaColumn ? kind(schemaColumn) : "text",
-                                      nullable: !field.required,
+                                      nullable: schemaColumn?.nullable ?? true,
                                       length: schemaColumn?.length || 255,
                                       precision: schemaColumn?.precision || 18,
                                       scale: schemaColumn?.scale ?? 2,
@@ -1039,7 +982,7 @@ export function ObjectEditor({
                                 <button
                                   className="danger"
                                   aria-label={`Delete field ${field.name}`}
-                                  disabled={busy || !!schemaColumn?.primaryKey || !!schemaColumn?.autoIncrement}
+                                  disabled={busy || field.name === "datatype" || !!schemaColumn?.primaryKey || !!schemaColumn?.autoIncrement}
                                   onClick={() => {
                                     if (!window.confirm(`Delete field ${field.name}? This permanently removes the field and its configuration.`)) return;
                                     void run(async () => {
@@ -1062,6 +1005,13 @@ export function ObjectEditor({
                   </tbody>
                 </table>
               </div>
+              <DataTypesEditor
+                dataTypes={dataTypes}
+                defaultDataTypeKey={defaultDataTypeKey}
+                fields={objectFields}
+                disabled={busy || objectLoading}
+                save={saveDataTypes}
+              />
               <div className="object-editor-footer">
                 <div className="actions object-field-actions">
                   <button
@@ -1074,7 +1024,6 @@ export function ObjectEditor({
                         name: "",
                         label: "",
                         readOnly: false,
-                        required: false,
                         widget: "text",
                       });
                       setPendingVirtual(false);
@@ -1185,7 +1134,9 @@ export function ObjectEditor({
                           `/admin/connections/${connection}/tables/${encodeURIComponent(table)}/object`,
                           "PUT",
                           {
-                            fields: objectFields,
+                            fields: canonicalObjectFields(objectFields),
+                            dataTypes: reconcileDataTypes(dataTypes, objectFields),
+                            defaultDataTypeKey,
                             view: {
                               ...objectView,
                               label: objectView.label?.trim(),

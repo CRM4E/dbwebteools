@@ -76,10 +76,14 @@ public partial class ApiTests
                     }
                 );
             var first = await Schema(child);
-            var pk = Assert.Single(first.Columns);
+            Assert.Equal(2, first.Columns.Count);
+            var pk = first.Columns.Single(column => column.Name == "record_id");
             Assert.Equal("record_id", pk.Name);
             Assert.True(pk.PrimaryKey);
             Assert.True(pk.AutoIncrement);
+            var datatype = first.Columns.Single(column => column.Name == "datatype");
+            Assert.False(datatype.Nullable);
+            Assert.NotNull(datatype.EditBlocked);
             (
                 await Column(parent, new("name", "text", false, Length: 40))
             ).EnsureSuccessStatusCode();
@@ -145,15 +149,21 @@ public partial class ApiTests
             Assert.Contains("lookup", settings.ToString());
             var beforeInsertVersion = (await Schema(child)).Version;
             cmd.CommandText =
-                $"INSERT INTO `{parent}` (name) VALUES ('Friendly');INSERT INTO `{child}` (title,amount,parent_id) VALUES ('Long title',12.3456,1)";
+                $"INSERT INTO `{parent}` (name) VALUES ('Friendly');INSERT INTO `{child}` (title,amount,parent_id,datatype) VALUES ('Long title',12.3456,1,'default')";
             await cmd.ExecuteNonQueryAsync();
             Assert.Equal(beforeInsertVersion, (await Schema(child)).Version);
-            cmd.CommandText = $"INSERT INTO `{child}` (parent_id) VALUES(999)";
+            cmd.CommandText = $"INSERT INTO `{child}` (parent_id,datatype) VALUES(999,'default')";
             await Assert.ThrowsAsync<MySqlException>(() => cmd.ExecuteNonQueryAsync());
             // Invalid keys are also rejected by the regular record API.
             var add = await admin.PostAsJsonAsync(
                 $"/api/connections/{id}/tables/{child}/create",
-                new { values = new { parent_id = 999 } }
+                new
+                {
+                    values = new
+                    {
+                        parent_id = 999
+                    }
+                }
             );
             Assert.Equal(HttpStatusCode.BadRequest, add.StatusCode);
             Assert.Equal(

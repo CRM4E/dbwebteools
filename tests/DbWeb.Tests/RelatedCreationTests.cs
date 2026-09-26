@@ -83,7 +83,7 @@ public partial class ApiTests
                 ),
             ];
             var layoutPath = $"/api/admin/connections/{connection}/tables/{child}/layout";
-            (await admin.PutAsJsonAsync(layoutPath, fields)).EnsureSuccessStatusCode();
+            await SaveConfiguration(admin, layoutPath, fields);
             var tab = new RelatedTab(
                 Guid.NewGuid().ToString(),
                 "Children",
@@ -270,7 +270,7 @@ public partial class ApiTests
                 Lookup = field.Lookup! with { KeyColumn = "code" },
             };
             fields[0] = field;
-            (await admin.PutAsJsonAsync(layoutPath, fields)).EnsureSuccessStatusCode();
+            await SaveConfiguration(admin, layoutPath, fields);
             preview = await Preview(key);
             Assert.Equal("101", preview.GetProperty("values").GetProperty("parent_id").ToString());
             Assert.Equal(
@@ -403,7 +403,7 @@ public partial class ApiTests
             );
             // Removing the layout relation fails closed for lists and creates.
             fields.RemoveAt(0);
-            (await admin.PutAsJsonAsync(layoutPath, fields)).EnsureSuccessStatusCode();
+            await SaveConfiguration(admin, layoutPath, fields);
             Assert.Equal(
                 HttpStatusCode.BadRequest,
                 (
@@ -437,7 +437,7 @@ public partial class ApiTests
                     },
                 }
             );
-            (await admin.PutAsJsonAsync(layoutPath, fields)).EnsureSuccessStatusCode();
+            await SaveConfiguration(admin, layoutPath, fields);
             var editablePreview = await Preview(key);
             Assert.DoesNotContain(
                 editablePreview.GetProperty("lockedFields").EnumerateArray(),

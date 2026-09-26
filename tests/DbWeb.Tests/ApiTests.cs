@@ -58,6 +58,58 @@ public partial class ApiTests
         await Csrf(c);
     }
 
+    static string ObjectPath(string layoutPath) =>
+        layoutPath.EndsWith("/layout", StringComparison.Ordinal)
+            ? layoutPath[..^"/layout".Length] + "/object"
+            : throw new ArgumentException("Expected a layout endpoint.", nameof(layoutPath));
+
+    static async Task<StoredObjectDefinition> CanonicalConfiguration(
+        HttpClient client,
+        string layoutPath,
+        IEnumerable<LayoutField> fields,
+        ListView? view = null
+    )
+    {
+        var objectPath = ObjectPath(layoutPath);
+        var current = await client.GetFromJsonAsync<ObjectDefinition>(objectPath);
+        return ObjectModel.Normalize(
+            ObjectModel.Split(
+                new LayoutDefinition(fields.ToList(), view ?? current?.View)
+            )
+        );
+    }
+
+    static async Task<HttpResponseMessage> PutObjectConfiguration(
+        HttpClient client,
+        string layoutPath,
+        IEnumerable<LayoutField> fields,
+        ListView? view = null
+    )
+    {
+        var configuration = await CanonicalConfiguration(client, layoutPath, fields, view);
+        return await client.PutAsJsonAsync(ObjectPath(layoutPath), configuration.Object);
+    }
+
+    static async Task SaveConfiguration(
+        HttpClient client,
+        string layoutPath,
+        IEnumerable<LayoutField> fields,
+        ListView? view = null
+    )
+    {
+        var configuration = await CanonicalConfiguration(client, layoutPath, fields, view);
+        (
+            await client.PutAsJsonAsync(ObjectPath(layoutPath), configuration.Object)
+        ).EnsureSuccessStatusCode();
+        var completedObject = (
+            await client.GetFromJsonAsync<ObjectDefinition>(ObjectPath(layoutPath))
+        )!;
+        var completedLayout = ObjectModel.CompleteLayout(completedObject, configuration.Layout);
+        (
+            await client.PutAsJsonAsync(layoutPath, completedLayout)
+        ).EnsureSuccessStatusCode();
+    }
+
     [Fact]
     public async Task AnonymousCannotReadAdministration()
     {
@@ -223,7 +275,7 @@ public partial class ApiTests
                 "lookup",
                 lookup
             );
-            (await admin.PutAsJsonAsync(layoutPath, new[] { field })).EnsureSuccessStatusCode();
+            await SaveConfiguration(admin, layoutPath, new[] { field });
             foreach (var search in new[] { "9007199254740993", "Alice", "special@", "%" })
             {
                 var page = await admin.GetFromJsonAsync<JsonElement>(
@@ -310,7 +362,8 @@ public partial class ApiTests
                 Assert.Equal(
                     HttpStatusCode.BadRequest,
                     (
-                        await admin.PutAsJsonAsync(
+                        await PutObjectConfiguration(
+                            admin,
                             layoutPath,
                             new[] { field with { Lookup = invalid } }
                         )

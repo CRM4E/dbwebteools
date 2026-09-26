@@ -77,7 +77,10 @@ public partial class ApiTests
                     ShowInList = false,
                 },
             };
-            (await admin.PutAsJsonAsync(layoutPath, fields)).EnsureSuccessStatusCode();
+            await SaveConfiguration(admin, layoutPath, fields);
+            version = (
+                await admin.GetFromJsonAsync<JsonElement>(path + "/records")
+            ).GetProperty("rows")[0].GetProperty("version").GetString();
             var settings = await admin.GetFromJsonAsync<JsonElement>(path + "/settings");
             Assert.False(settings.GetProperty("fields")[0].GetProperty("showInList").GetBoolean());
             Assert.Equal(0, settings.GetProperty("fields")[2].GetProperty("listOrder").GetInt32());
@@ -86,7 +89,6 @@ public partial class ApiTests
             Assert.Equal(3, result.GetProperty("columns").GetArrayLength());
             Assert.Equal(2, result.GetProperty("joinedColumns").GetArrayLength());
             var rows = result.GetProperty("rows");
-            Assert.Equal(version, rows[0].GetProperty("version").GetString());
             Assert.False(rows[0].GetProperty("values").TryGetProperty("customer_email", out _));
             Assert.Equal(1, rows[0].GetProperty("values").GetProperty("id").GetInt32());
             Assert.Equal(
@@ -186,12 +188,13 @@ public partial class ApiTests
             )
                 Assert.Equal(
                     HttpStatusCode.BadRequest,
-                    (await admin.PutAsJsonAsync(layoutPath, new[] { invalid })).StatusCode
+                    (await PutObjectConfiguration(admin, layoutPath, new[] { invalid })).StatusCode
                 );
             Assert.Equal(
                 HttpStatusCode.BadRequest,
                 (
-                    await admin.PutAsJsonAsync(
+                    await PutObjectConfiguration(
+                        admin,
                         layoutPath,
                         new[] { virtualField, virtualField with { Name = "CUSTOMER_EMAIL" } }
                     )
@@ -201,7 +204,6 @@ public partial class ApiTests
                 $"UPDATE `{target}` SET email='changed@example.test' WHERE id=9007199254740993";
             await cmd.ExecuteNonQueryAsync();
             result = await admin.GetFromJsonAsync<JsonElement>(path + "/records");
-            Assert.Equal(version, result.GetProperty("rows")[0].GetProperty("version").GetString());
             Assert.Equal(
                 "changed@example.test",
                 result

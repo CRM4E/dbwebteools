@@ -151,7 +151,10 @@ public partial class DatabaseService(IDataProtectionProvider protection)
         if (!string.IsNullOrEmpty(sort) && readable != null && !readable.Contains(sort))
             throw new ApiError(403, "You cannot sort by a restricted field.");
         if (readable != null && !string.IsNullOrEmpty(view?.Sort) && !readable.Contains(view.Sort))
-            view = view with { Sort = null };
+            view = view with
+            {
+                Sort = null
+            };
         page = Math.Max(1, page);
         size = Math.Clamp(size, 1, 100);
         if (string.IsNullOrEmpty(sort))
@@ -369,6 +372,8 @@ public partial class DatabaseService(IDataProtectionProvider protection)
         if (input.Values == null)
             throw new ApiError(400, "Values object required.");
         var cols = await Columns(db, table);
+        if (operation == "update" && input.Values.Keys.Any(DataTypeColumn.Is))
+            throw new ApiError(400, "datatype is managed by the backend and cannot be edited.");
         if (operation == "create")
             ApplyCreationDefaults(fields ?? [], cols, input.Values);
         var plans = sumups ?? [];

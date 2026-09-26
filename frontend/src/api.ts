@@ -119,14 +119,29 @@ export type Field = {
   listOrder?: number | null;
   join?: Join | null;
   required?: boolean;
+  enabledOptionKeys?: string[] | null;
   formula?: string | null;
 };
 export type ObjectField = Omit<
   Field,
   "section" | "order" | "hidden" | "showInList" | "listOrder"
 >;
+export type DataTypeField = {
+  name: string;
+  required: boolean;
+  mask: InputMask | null;
+  overrideDropdownOptions: boolean;
+  enabledOptionKeys: string[];
+};
+export type DataTypeDefinition = {
+  key: string;
+  label: string;
+  fields: DataTypeField[];
+};
 export type ObjectDefinition = {
   fields: ObjectField[];
+  dataTypes: DataTypeDefinition[];
+  defaultDataTypeKey: string;
   view?: ListView | null;
   sumupsPending?: boolean;
 };

@@ -19,6 +19,16 @@ public record ObjectField(
     InputMask? Mask = null
 );
 
+public record ObjectDataTypeField(
+    string Name,
+    bool Required = false,
+    InputMask? Mask = null,
+    bool OverrideDropdownOptions = false,
+    List<string>? EnabledOptionKeys = null
+);
+
+public record ObjectDataType(string Key, string Label, List<ObjectDataTypeField> Fields);
+
 public record InputMask(
     string CharacterSet = "",
     int MinimumLength = 1,
@@ -29,7 +39,9 @@ public record InputMask(
 public record ObjectDefinition(
     List<ObjectField> Fields,
     ListView? View = null,
-    bool SumupsPending = false
+    bool SumupsPending = false,
+    List<ObjectDataType>? DataTypes = null,
+    string? DefaultDataTypeKey = null
 );
 
 public record FieldPresentation(
@@ -125,7 +137,7 @@ public static class ObjectModel
                 };
                 return Normalize(stored);
             }
-            return Split(DatabaseService.ParseLegacyLayout(document.RootElement));
+            return Normalize(Split(DatabaseService.ParseLegacyLayout(document.RootElement)));
         }
         catch (JsonException)
         {
@@ -133,16 +145,17 @@ public static class ObjectModel
         }
     }
 
-    static StoredObjectDefinition Normalize(StoredObjectDefinition stored)
+    public static StoredObjectDefinition Normalize(StoredObjectDefinition stored)
     {
-        var legacyLabels = stored.Object.Fields.ToDictionary(
-            f => f.Name,
-            f => f.Label,
-            StringComparer.OrdinalIgnoreCase
-        );
-        var names = stored
-            .Object.Fields.Select(f => f.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var sourceFields = stored.Object.Fields.Where(field => !DataTypeColumn.Is(field.Name)).ToList();
+        var legacyLabels = sourceFields
+            .GroupBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First().Label,
+                StringComparer.OrdinalIgnoreCase
+            );
+        var names = sourceFields.Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var layout = stored
             .Layout.Fields.Where(f => names.Contains(f.Name))
             .GroupBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
@@ -158,9 +171,9 @@ public static class ObjectModel
                 };
             })
             .ToList();
-        for (var i = 0; i < stored.Object.Fields.Count; i++)
+        for (var i = 0; i < sourceFields.Count; i++)
         {
-            var field = stored.Object.Fields[i];
+            var field = sourceFields[i];
             if (!layout.Any(f => f.Name.Equals(field.Name, StringComparison.OrdinalIgnoreCase)))
                 layout.Add(
                     new(
@@ -172,13 +185,96 @@ public static class ObjectModel
                 );
         }
         var labels = layout.ToDictionary(f => f.Name, f => f.Label, StringComparer.OrdinalIgnoreCase);
+        var dataTypes = stored.Object.DataTypes?
+            .Where(type => type != null && !string.IsNullOrEmpty(type.Key))
+            .GroupBy(type => type.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
+        var defaultKey = stored.Object.DefaultDataTypeKey;
+        if (dataTypes is not { Count: > 0 })
+        {
+            defaultKey = "default";
+            dataTypes =
+            [
+                new(
+                    defaultKey,
+                    "Default",
+                    sourceFields
+                        .Select(f => new ObjectDataTypeField(
+                            f.Name,
+                            f.Required,
+                            f.Mask,
+                            false,
+                            []
+                        ))
+                        .ToList()
+                ),
+            ];
+        }
+        else
+        {
+            defaultKey = string.IsNullOrEmpty(defaultKey) ? dataTypes[0].Key : defaultKey;
+            dataTypes = dataTypes
+                .Where(type => type != null)
+                .Select(type =>
+                {
+                    var configured = (type.Fields ?? [])
+                        .Where(field => field != null && names.Contains(field.Name))
+                        .GroupBy(field => field.Name, StringComparer.OrdinalIgnoreCase)
+                        .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+                    return type with
+                    {
+                        Fields = sourceFields.Select(field =>
+                            {
+                                var setting = configured.GetValueOrDefault(field.Name)
+                                    ?? new ObjectDataTypeField(
+                                        field.Name,
+                                        Required: string.Equals(
+                                            type.Key,
+                                            defaultKey,
+                                            StringComparison.OrdinalIgnoreCase
+                                        ) && field.Required,
+                                        Mask: string.Equals(
+                                            type.Key,
+                                            defaultKey,
+                                            StringComparison.OrdinalIgnoreCase
+                                        )
+                                            ? field.Mask
+                                            : null
+                                    );
+                                return setting with
+                                {
+                                    Name = field.Name,
+                                    EnabledOptionKeys = setting.OverrideDropdownOptions
+                                        ? (setting.EnabledOptionKeys ?? []).ToList()
+                                        : [],
+                                };
+                            })
+                            .ToList(),
+                    };
+                })
+                .ToList();
+            defaultKey = dataTypes
+                .FirstOrDefault(type =>
+                    type.Key != null
+                    && type.Key.Equals(defaultKey, StringComparison.OrdinalIgnoreCase)
+                )
+                ?.Key ?? dataTypes[0].Key;
+        }
         var definition = stored.Object with
         {
             // Keep the legacy projection populated while presentation owns labels.
-            Fields = stored.Object.Fields.Select(f =>
-                    f with { Label = labels.GetValueOrDefault(f.Name) ?? f.Label ?? f.Name }
+            Fields = sourceFields.Select(f =>
+                    f with
+                    {
+                        Label = labels.GetValueOrDefault(f.Name) ?? f.Label ?? f.Name,
+                        Required = false,
+                        Mask = null,
+                    }
                 )
                 .ToList(),
+            DataTypes = dataTypes,
+            DefaultDataTypeKey = defaultKey,
         };
         return new(definition, new(layout));
     }
@@ -231,6 +327,8 @@ public static class ObjectModel
         var fields = definition.Fields.ToList();
         foreach (var column in columns)
             if (
+                !column.Name.Equals("datatype", StringComparison.OrdinalIgnoreCase)
+                &&
                 !fields.Any(field =>
                     field.Name.Equals(column.Name, StringComparison.OrdinalIgnoreCase)
                 )
@@ -238,11 +336,85 @@ public static class ObjectModel
                 fields.Add(
                     new(column.Name, column.Name, column.Generated || column.AutoIncrement, "auto")
                 );
-        return definition with { Fields = fields };
+        return Normalize(new(definition with
+        {
+            Fields = fields
+        }, new([]))).Object;
+    }
+
+    public static ObjectDefinition ParseObject(JsonElement input)
+    {
+        try
+        {
+            var result = input.Deserialize<ObjectDefinition>(Json)
+                ?? throw new ApiError(400, "Object fields are required.");
+            // CompleteLayout normalizes before the full database-aware validation.
+            // Reject malformed field structures here so they cannot reach the
+            // normalizer and surface as a non-API exception.
+            if (result.Fields == null || result.Fields.Any(field => field == null))
+                throw new ApiError(400, "Object fields are required.");
+            if (result.Fields.Any(field => string.IsNullOrWhiteSpace(field.Name)))
+                throw new ApiError(400, "Object field names are required.");
+            return result;
+        }
+        catch (JsonException)
+        {
+            throw new ApiError(400, "Invalid object configuration.");
+        }
+    }
+
+    public static bool HasProperty(JsonElement input, string name) =>
+        input.ValueKind == JsonValueKind.Object && TryProperty(input, name, out _);
+
+    public static bool HasLegacyFieldBehavior(JsonElement input)
+    {
+        var fields = input;
+        if (
+            input.ValueKind != JsonValueKind.Array
+            && (
+                input.ValueKind != JsonValueKind.Object
+                || !TryProperty(input, "fields", out fields)
+            )
+        )
+            return false;
+        if (fields.ValueKind != JsonValueKind.Array)
+            return false;
+        return fields.EnumerateArray().Any(field =>
+            field.ValueKind == JsonValueKind.Object
+            && (TryProperty(field, "required", out _) || TryProperty(field, "mask", out _))
+        );
+    }
+
+    public static void ValidateLegacyLayoutWrite(JsonElement input)
+    {
+        if (HasLegacyFieldBehavior(input))
+            throw new ApiError(
+                400,
+                "Required and mask settings moved to Data Types. Save them through the object endpoint."
+            );
+    }
+
+    public static bool HasCanonicalDataTypes(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && TryProperty(document.RootElement, "object", out var definition)
+                && TryProperty(definition, "dataTypes", out var types)
+                && types.ValueKind == JsonValueKind.Array;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     public static LayoutDefinition Merge(ObjectDefinition definition, LayoutPresentation layout)
     {
+        definition = Normalize(new(definition, layout)).Object;
         var presentation = layout.Fields.ToDictionary(
             f => f.Name,
             StringComparer.OrdinalIgnoreCase
@@ -255,6 +427,9 @@ public static class ObjectModel
                         var p =
                             presentation.GetValueOrDefault(f.Name)
                             ?? new FieldPresentation(f.Name, EditorOrder: i, ListOrder: i);
+                        var setting = definition.DataTypes!
+                            .Single(type => type.Key == definition.DefaultDataTypeKey)
+                            .Fields.Single(candidate => candidate.Name.Equals(f.Name, StringComparison.OrdinalIgnoreCase));
                         return new LayoutField(
                             f.Name,
                             p.Label ?? f.Label,
@@ -268,12 +443,17 @@ public static class ObjectModel
                             p.ShowInList,
                             p.ListOrder,
                             f.Join,
-                            f.Required,
+                            setting.Required,
                             f.Formula,
                             f.Sumup,
                             f.CreationDefault,
-                            f.Mask
-                        );
+                            setting.Mask
+                        )
+                        {
+                            EnabledOptionKeys = setting.OverrideDropdownOptions
+                                ? setting.EnabledOptionKeys ?? []
+                                : null,
+                        };
                     }
                 )
                 .ToList(),

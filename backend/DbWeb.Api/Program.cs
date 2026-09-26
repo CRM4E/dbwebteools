@@ -123,6 +123,33 @@ using (var scope = app.Services.CreateScope())
         db.SaveChanges();
     }
 }
+if (args.Contains("--provision-data-types", StringComparer.Ordinal))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDb>();
+    var service = scope.ServiceProvider.GetRequiredService<DatabaseService>();
+    foreach (var configuredConnection in await db.Connections.OrderBy(item => item.Id).ToListAsync())
+    {
+        await using var connection = await service.Open(configuredConnection);
+        await using var gate = await SumupGate.Enter(connection);
+        foreach (var table in await service.Tables(connection))
+        {
+            var configuration = await db.Layouts.SingleOrDefaultAsync(item =>
+                item.ConnectionId == configuredConnection.Id && item.Table == table
+            );
+            var stored = ObjectModel.Stored(configuration?.FieldsJson);
+            await DataTypeColumn.Ensure(
+                connection,
+                service,
+                table,
+                stored.Object.DefaultDataTypeKey!,
+                stored.Object.DataTypes!.Select(type => type.Key)
+            );
+            Console.WriteLine($"Provisioned datatype for {configuredConnection.Id}/{table}");
+        }
+    }
+    return;
+}
 app.UseExceptionHandler();
 app.Use(
     async (c, next) =>
@@ -266,7 +293,10 @@ admin.MapPost(
         u.PasswordHash = h.HashPassword(u, i.Password!);
         db.Users.Add(u);
         await db.SaveChangesAsync();
-        return Results.Ok(new { u.Id });
+        return Results.Ok(new
+        {
+            u.Id
+        });
     }
 );
 admin.MapPut(
@@ -314,7 +344,10 @@ admin.MapPost(
         SetConnection(c, i, p);
         db.Connections.Add(c);
         await db.SaveChangesAsync();
-        return Results.Ok(new { c.Id });
+        return Results.Ok(new
+        {
+            c.Id
+        });
     }
 );
 admin.MapPut(
@@ -347,7 +380,10 @@ admin.MapPost(
         await using var c = await service.Open(
             await db.Connections.FindAsync(id) ?? throw new ApiError(404, "Connection not found.")
         );
-        return Results.Ok(new { tables = (await service.Tables(c)).Count });
+        return Results.Ok(new
+        {
+            tables = (await service.Tables(c)).Count
+        });
     }
 );
 admin.MapGet(
@@ -394,7 +430,9 @@ admin.MapPut(
             if (
                 i.Fields.Count > 2000
                 || i.Fields.Any(f =>
-                    !names.Contains(f.Key) || f.Value is not "none" and not "read" and not "write"
+                    !names.Contains(f.Key)
+                    || f.Value is not "none" and not "read" and not "write"
+                    || DataTypeColumn.Is(f.Key) && f.Value == "write"
                 )
             )
                 throw new ApiError(
@@ -564,12 +602,13 @@ api.MapGet(
             x.ConnectionId == id && x.Table == table
         );
         await using var c = await service.Open(config);
+        var stored = ObjectModel.Stored(l?.FieldsJson);
         var fields = await FieldAccess.VisibleFields(
             db,
             ctx,
             id,
             table,
-            DatabaseService.LayoutFields(l?.FieldsJson),
+            ObjectModel.Merge(stored).Fields,
             await service.Columns(c, table)
         );
         var access = await FieldAccess.For(db, ctx, id, table);
@@ -589,12 +628,12 @@ admin.MapGet(
         var config =
             await db.Connections.FindAsync(id) ?? throw new ApiError(404, "Connection not found.");
         await using var connection = await service.Open(config);
-        var columns = await service.Columns(connection, table);
         var stored = ObjectModel.Stored(
             (
                 await db.Layouts.SingleOrDefaultAsync(x => x.ConnectionId == id && x.Table == table)
             )?.FieldsJson
         );
+        var columns = await service.Columns(connection, table);
         return ObjectModel.WithColumns(stored.Object, columns);
     }
 );
@@ -621,6 +660,8 @@ admin.MapDelete(
     "/connections/{id:int}/tables/{table}/fields/{field}",
     async (int id, string table, string field, AppDb db, DatabaseService service, HttpContext ctx) =>
     {
+        if (DataTypeColumn.Is(field))
+            throw new ApiError(400, "The datatype column is managed by the backend.");
         var config = await db.Connections.FindAsync(id) ?? throw new ApiError(404, "Connection not found.");
         await using var connection = await service.Open(config);
         await using var gate = await SumupGate.Enter(connection);
@@ -633,7 +674,8 @@ admin.MapDelete(
             ObjectModel.CompleteLayout(completedObject, stored.Layout)
         );
         var existing = stored.Object.Fields.SingleOrDefault(x => x.Name.Equals(field, StringComparison.OrdinalIgnoreCase));
-        if (existing == null) throw new ApiError(404, "Field not found.");
+        if (existing == null)
+            throw new ApiError(404, "Field not found.");
         var physical = columns.Any(x => x.Name.Equals(field, StringComparison.OrdinalIgnoreCase));
         var schema = physical ? await SchemaDesigner.Inspect(connection, service, table) : null;
         var schemaColumn = schema?.Columns.Single(x => x.Name.Equals(field, StringComparison.OrdinalIgnoreCase));
@@ -698,7 +740,12 @@ admin.MapDelete(
                 pointsToTable
                 && (removed.Contains(lookup.KeyColumn) || removed.Contains(lookup.DisplayColumn))
             )
-                return candidate with { Widget = "auto", Lookup = null, Options = null };
+                return candidate with
+                {
+                    Widget = "auto",
+                    Lookup = null,
+                    Options = null
+                };
             var mappings = lookup.CopyMappings?.Where(mapping =>
                     !removed.Contains(mapping.DestinationColumn)
                     && (!pointsToTable || !removed.Contains(mapping.SourceColumn))
@@ -725,14 +772,27 @@ admin.MapDelete(
             };
         }).ToList();
         var view = stored.Object.View;
-        if (view != null) view = view with {
-            Sort = removed.Contains(view.Sort ?? "") ? null : view.Sort,
-            Filters = view.Filters?.Where(filter => !removed.Contains(filter.Column)).ToList()
+        if (view != null)
+            view = view with
+            {
+                Sort = removed.Contains(view.Sort ?? "") ? null : view.Sort,
+                Filters = view.Filters?.Where(filter => !removed.Contains(filter.Column)).ToList()
+            };
+        var definition = stored.Object with
+        {
+            Fields = fields,
+            View = view
         };
-        var definition = stored.Object with { Fields = fields, View = view };
         var presentation = new LayoutPresentation(stored.Layout.Fields.Where(x => !removed.Contains(x.Name)).ToList());
-        var merged = await ObjectConfigurationRules.Validate(service, connection, table, definition, presentation);
-        var affected = new List<(RecordLayout Configuration, LayoutDefinition Definition)>();
+        var cleaned = ObjectModel.Normalize(new(definition, presentation));
+        var merged = await ObjectConfigurationRules.Validate(
+            service,
+            connection,
+            table,
+            cleaned.Object,
+            cleaned.Layout
+        );
+        var affected = new List<(RecordLayout Configuration, StoredObjectDefinition Definition)>();
         if (configuration != null)
             affected.Add((configuration, merged));
         foreach (
@@ -769,7 +829,12 @@ admin.MapDelete(
                     if (removed.Contains(lookup.KeyColumn) || removed.Contains(lookup.DisplayColumn))
                     {
                         otherFields.Add(
-                            candidate with { Widget = "auto", Lookup = null, Options = null }
+                            candidate with
+                            {
+                                Widget = "auto",
+                                Lookup = null,
+                                Options = null
+                            }
                         );
                         changed = true;
                         continue;
@@ -835,10 +900,14 @@ admin.MapDelete(
             if (!changed)
                 continue;
             var names = otherFields.Select(item => item.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var otherDefinition = otherStored.Object with { Fields = otherFields };
+            var otherDefinition = otherStored.Object with
+            {
+                Fields = otherFields
+            };
             var otherPresentation = new LayoutPresentation(
                 otherStored.Layout.Fields.Where(item => names.Contains(item.Name)).ToList()
             );
+            var otherCleaned = ObjectModel.Normalize(new(otherDefinition, otherPresentation));
             affected.Add(
                 (
                     other,
@@ -846,13 +915,14 @@ admin.MapDelete(
                         service,
                         connection,
                         other.Table,
-                        otherDefinition,
-                        otherPresentation
+                        otherCleaned.Object,
+                        otherCleaned.Layout
                     )
                 )
             );
         }
-        if (physical) await SchemaDesigner.DropColumn(connection, table, field);
+        if (physical)
+            await SchemaDesigner.DropColumn(connection, table, field);
         foreach (var item in affected)
             await Sumups.SaveLayout(db, service, connection, id, item.Configuration, item.Definition);
         foreach (var page in await db.Pages.Where(page => page.ConnectionId == id).ToListAsync())
@@ -877,9 +947,13 @@ admin.MapDelete(
                     return tab;
                 var next = tab.Columns.Where(name => !removed.Contains(name)).ToList();
                 changed |= next.Count != tab.Columns.Count;
-                return tab with { Columns = next };
+                return tab with
+                {
+                    Columns = next
+                };
             }).ToList();
-            if (changed) page.TabsJson = JsonSerializer.Serialize(tabs);
+            if (changed)
+                page.TabsJson = JsonSerializer.Serialize(tabs);
         }
         foreach (
             var policy in await db.FieldPolicies.Where(policy =>
@@ -895,14 +969,19 @@ admin.MapDelete(
                 levels.Remove(name);
             policy.FieldsJson = JsonSerializer.Serialize(levels);
         }
-        db.Audit.Add(new() { Actor = ctx.User.Identity!.Name!, Action = physical ? "delete-column" : "delete-virtual-field", Resource = $"{id}/{table}/{field}" });
+        db.Audit.Add(new()
+        {
+            Actor = ctx.User.Identity!.Name!,
+            Action = physical ? "delete-column" : "delete-virtual-field",
+            Resource = $"{id}/{table}/{field}"
+        });
         await db.SaveChangesAsync();
         return Results.NoContent();
     }
 );
 admin.MapPut(
     "/connections/{id:int}/tables/{table}/object",
-    async (int id, string table, ObjectDefinition input, AppDb db, DatabaseService service) =>
+    async (int id, string table, JsonElement input, AppDb db, DatabaseService service) =>
     {
         var config =
             await db.Connections.FindAsync(id) ?? throw new ApiError(404, "Connection not found.");
@@ -912,7 +991,59 @@ admin.MapPut(
             x.ConnectionId == id && x.Table == table
         );
         var stored = ObjectModel.Stored(configuration?.FieldsJson);
-        var normalized = input with { SumupsPending = false };
+        var submitted = ObjectModel.ParseObject(input);
+        if (
+            configuration != null
+            && ObjectModel.HasCanonicalDataTypes(configuration.FieldsJson)
+            && !ObjectModel.HasProperty(input, "dataTypes")
+        )
+        {
+            if (ObjectModel.HasLegacyFieldBehavior(input))
+                throw new ApiError(
+                    400,
+                    "Required and mask settings moved to Data Types. Refresh this object before saving."
+                );
+            submitted = submitted with
+            {
+                DataTypes = stored.Object.DataTypes,
+                DefaultDataTypeKey = stored.Object.DefaultDataTypeKey,
+            };
+            submitted = ObjectModel.Normalize(new(submitted, stored.Layout)).Object;
+        }
+        else if (
+            configuration != null
+            && ObjectModel.HasCanonicalDataTypes(configuration.FieldsJson)
+        )
+        {
+            if (submitted.DataTypes?.Any(type => type == null) == true)
+                throw new ApiError(400, "Data type definitions cannot be null.");
+            if (!ObjectModel.HasProperty(input, "defaultDataTypeKey"))
+                submitted = submitted with
+                {
+                    DefaultDataTypeKey = stored.Object.DefaultDataTypeKey,
+                };
+            var submittedKeys = (submitted.DataTypes ?? [])
+                .Select(type => type.Key)
+                .ToHashSet(StringComparer.Ordinal);
+            var storedKeys = stored.Object.DataTypes!
+                .Select(type => type.Key)
+                .ToHashSet(StringComparer.Ordinal);
+            var removed = storedKeys.Where(key => !submittedKeys.Contains(key)).ToList();
+            var added = submittedKeys.Where(key => !storedKeys.Contains(key)).ToList();
+            if (
+                removed.Count > 0
+                && added.Count > 0
+                || removed.Contains(stored.Object.DefaultDataTypeKey!, StringComparer.Ordinal)
+            )
+                throw new ApiError(
+                    400,
+                    "Data type keys are immutable. Delete a non-default type or add a new type in a separate save."
+                );
+        }
+        var normalized = submitted with
+        {
+            SumupsPending = false
+        };
         var merged = await ObjectConfigurationRules.Validate(
             service,
             connection,
@@ -920,12 +1051,31 @@ admin.MapPut(
             normalized,
             ObjectModel.CompleteLayout(normalized, stored.Layout)
         );
+        var configuredTypeKeys = merged.Object.DataTypes!.Select(type => type.Key).ToList();
+        await DataTypeColumn.ValidateExisting(
+            connection,
+            service,
+            table,
+            configuredTypeKeys
+        );
+        await DataTypeColumn.Prepare(connection, service, table);
         if (configuration == null)
         {
-            configuration = new() { ConnectionId = id, Table = table };
+            configuration = new()
+            {
+                ConnectionId = id,
+                Table = table
+            };
             db.Layouts.Add(configuration);
         }
         await Sumups.SaveLayout(db, service, connection, id, configuration, merged);
+        await DataTypeColumn.Finalize(
+            connection,
+            service,
+            table,
+            merged.Object.DefaultDataTypeKey!,
+            configuredTypeKeys
+        );
         return Results.NoContent();
     }
 );
@@ -944,6 +1094,9 @@ admin.MapPut(
 
         // Compatibility: existing API clients may still submit the former combined
         // field array/object. New clients submit presentation-only fields here.
+        // Data Type-owned behavior is invalid in either shape. Check before shape
+        // detection because a combined object can omit both widget and view.
+        ObjectModel.ValidateLegacyLayoutWrite(input);
         var legacy = input.ValueKind == JsonValueKind.Array;
         if (input.ValueKind == JsonValueKind.Object)
         {
@@ -953,6 +1106,7 @@ admin.MapPut(
             if (
                 fieldsProperty.Value.ValueKind == JsonValueKind.Array
                 && fieldsProperty.Value.GetArrayLength() > 0
+                && fieldsProperty.Value[0].ValueKind == JsonValueKind.Object
             )
                 legacy = fieldsProperty
                     .Value[0]
@@ -963,13 +1117,31 @@ admin.MapPut(
                 .Any(p => p.Name.Equals("view", StringComparison.OrdinalIgnoreCase));
         }
 
-        LayoutDefinition merged;
+        StoredObjectDefinition merged;
         if (legacy)
         {
-            merged = DatabaseService.ParseLayout(input) with { SumupsPending = false };
+            var legacyDefinition = DatabaseService.ParseLayout(input) with
+            {
+                SumupsPending = false,
+            };
             if (input.ValueKind == JsonValueKind.Array)
-                merged = merged with { View = stored.Object.View };
-            var split = ObjectModel.Split(merged);
+                legacyDefinition = legacyDefinition with
+                {
+                    View = stored.Object.View
+                };
+            var split = ObjectModel.Split(legacyDefinition);
+            if (configuration != null && ObjectModel.HasCanonicalDataTypes(configuration.FieldsJson))
+            {
+                split = split with
+                {
+                    Object = split.Object with
+                    {
+                        DataTypes = stored.Object.DataTypes,
+                        DefaultDataTypeKey = stored.Object.DefaultDataTypeKey,
+                    },
+                };
+                split = ObjectModel.Normalize(split);
+            }
             merged = await ObjectConfigurationRules.Validate(
                 service,
                 connection,
@@ -1042,7 +1214,10 @@ admin.MapPut(
                             !fieldsWithSection.Contains(field.Name)
                             && existingSections.TryGetValue(field.Name, out var section)
                         )
-                            result = result with { Section = section };
+                            result = result with
+                            {
+                                Section = section
+                            };
                         if (result.Label == null)
                             result = result with
                             {
@@ -1070,10 +1245,29 @@ admin.MapPut(
         }
         if (configuration == null)
         {
-            configuration = new() { ConnectionId = id, Table = table };
+            configuration = new()
+            {
+                ConnectionId = id,
+                Table = table
+            };
             db.Layouts.Add(configuration);
         }
+        var configuredTypeKeys = merged.Object.DataTypes!.Select(type => type.Key).ToList();
+        await DataTypeColumn.ValidateExisting(
+            connection,
+            service,
+            table,
+            configuredTypeKeys
+        );
+        await DataTypeColumn.Prepare(connection, service, table);
         await Sumups.SaveLayout(db, service, connection, id, configuration, merged);
+        await DataTypeColumn.Finalize(
+            connection,
+            service,
+            table,
+            merged.Object.DefaultDataTypeKey!,
+            configuredTypeKeys
+        );
         return Results.NoContent();
     }
 );
@@ -1131,7 +1325,11 @@ api.MapGet(
         {
             var labels = await s.LookupLabels(c, lookup, new object?[] { key });
             return Results.Ok(
-                new { found = labels.ContainsKey(key), label = labels.GetValueOrDefault(key) }
+                new
+                {
+                    found = labels.ContainsKey(key),
+                    label = labels.GetValueOrDefault(key)
+                }
             );
         }
         lookup = await FieldAccess.Lookup(db, ctx, id, lookup);
@@ -1165,7 +1363,10 @@ api.MapPost(
         lookup = await FieldAccess.Lookup(db, ctx, id, lookup, true);
         await using var c = await s.Open(config);
         await s.ValidateCopyMappings(c, fields, await s.Columns(c, table));
-        return new { values = await s.CopyLookupValues(c, lookup, input.Key) };
+        return new
+        {
+            values = await s.CopyLookupValues(c, lookup, input.Key)
+        };
     }
 );
 api.MapPost(
@@ -1244,7 +1445,10 @@ api.MapPost(
         await using var c = await service.Open(config);
         var values = await RecordWrites.Preview(db, ctx, id, table, service, c);
         var access = await FieldAccess.For(db, ctx, id, table);
-        return new { values = values.Where(v => access.Read(v.Key)).ToDictionary() };
+        return new
+        {
+            values = values.Where(v => access.Read(v.Key)).ToDictionary()
+        };
     }
 );
 foreach (var operation in new[] { "create", "update", "delete" })
@@ -1378,7 +1582,10 @@ admin.MapPost(
             }
         );
         await db.SaveChangesAsync();
-        return Results.Ok(new { fields = selected.Count });
+        return Results.Ok(new
+        {
+            fields = selected.Count
+        });
     }
 );
 PageEndpoints.Map(app);
@@ -1409,4 +1616,6 @@ static void SetConnection(DatabaseConnection c, ConnectionInput i, IDataProtecti
         c.ProtectedPassword = p.CreateProtector("database-passwords").Protect(i.Password);
 }
 
-public partial class Program { }
+public partial class Program
+{
+}

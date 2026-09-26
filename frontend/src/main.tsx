@@ -970,6 +970,17 @@ export function RecordEditor({
             for (const c of writable) {
               const field = layout(c);
               if (
+                field?.widget === "dropdown" &&
+                field.enabledOptionKeys != null &&
+                values[c.name] != null &&
+                values[c.name] !== "" &&
+                (!row || values[c.name] !== row.values[c.name]) &&
+                !field.enabledOptionKeys.includes(String(values[c.name]))
+              )
+                throw new Error(
+                  `${field.label || c.name} is not an enabled dropdown value.`,
+                );
+              if (
                 field?.mask &&
                 !field.hidden &&
                 !field.readOnly &&
@@ -1186,9 +1197,24 @@ export function RecordEditor({
                             {String(values[c.name])} (not in configured list)
                           </option>
                         )}
-                      {l?.options?.map((o) => (
-                        <option key={o.key} value={o.key}>
+                      {l?.options?.filter((option) =>
+                        l.enabledOptionKeys == null ||
+                        l.enabledOptionKeys.includes(option.key) ||
+                        option.key === String(values[c.name] ?? ""),
+                      ).map((o) => (
+                        <option
+                          key={o.key}
+                          value={o.key}
+                          disabled={
+                            l.enabledOptionKeys != null &&
+                            !l.enabledOptionKeys.includes(o.key)
+                          }
+                        >
                           {o.display}
+                          {l.enabledOptionKeys != null &&
+                          !l.enabledOptionKeys.includes(o.key)
+                            ? " (not available)"
+                            : ""}
                         </option>
                       ))}
                     </select>

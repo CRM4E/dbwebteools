@@ -78,7 +78,7 @@ public partial class ApiTests
                     Formula: "[price] * [qty]"
                 ),
             ];
-            (await admin.PutAsJsonAsync(childLayout, childFields)).EnsureSuccessStatusCode();
+            await SaveConfiguration(admin, childLayout, childFields);
             List<LayoutField> fields =
             [
                 new(
@@ -122,7 +122,7 @@ public partial class ApiTests
                 Assert.Equal(count, r.GetInt32(1));
                 Assert.Equal(nonNull, r.GetInt32(2));
             }
-            (await admin.PutAsJsonAsync(parentLayout, fields)).EnsureSuccessStatusCode();
+            await SaveConfiguration(admin, parentLayout, fields);
             await AssertTotals(9007199254740993, 20.5m, 2, 1);
             await AssertTotals(42, 3, 1, 1);
             async Task<JsonElement> Row(string tableApi, int key)
@@ -143,20 +143,36 @@ public partial class ApiTests
                     childApi + "/update",
                     new
                     {
-                        key = new { id = key },
+                        key = new
+                        {
+                            id = key
+                        },
                         values,
                         version = row.GetProperty("version").GetString(),
                     }
                 );
             }
-            (await Update(1, new { qty = 3 })).EnsureSuccessStatusCode();
+            (await Update(1, new
+            {
+                qty = 3
+            })).EnsureSuccessStatusCode();
             await AssertTotals(9007199254740993, 30.75m, 2, 1);
-            (await Update(1, new { parent_id = 42 })).EnsureSuccessStatusCode();
+            (await Update(1, new
+            {
+                parent_id = 42
+            })).EnsureSuccessStatusCode();
             await AssertTotals(9007199254740993, 0, 1, 0);
             await AssertTotals(42, 33.75m, 2, 2);
-            (await Update(2, new { price = 2m, qty = 4 })).EnsureSuccessStatusCode();
+            (await Update(2, new
+            {
+                price = 2m,
+                qty = 4
+            })).EnsureSuccessStatusCode();
             await AssertTotals(9007199254740993, 8, 1, 1);
-            (await Update(1, new { parent_id = (int?)null })).EnsureSuccessStatusCode();
+            (await Update(1, new
+            {
+                parent_id = (int?)null
+            })).EnsureSuccessStatusCode();
             await AssertTotals(42, 3, 1, 1);
             var deleted = await Row(childApi, 3);
             (
@@ -164,8 +180,13 @@ public partial class ApiTests
                     childApi + "/delete",
                     new
                     {
-                        key = new { id = 3 },
-                        values = new { },
+                        key = new
+                        {
+                            id = 3
+                        },
+                        values = new
+                        {
+                        },
                         version = deleted.GetProperty("version").GetString(),
                     }
                 )
@@ -223,17 +244,23 @@ public partial class ApiTests
             {
                 Formula = "[price] / [qty]",
             };
-            (await admin.PutAsJsonAsync(childLayout, childFields)).EnsureSuccessStatusCode();
+            await SaveConfiguration(admin, childLayout, childFields);
             cmd.CommandText = $"UPDATE `{child}` SET qty=0 WHERE title='Locked insert'";
             await cmd.ExecuteNonQueryAsync();
-            (await Update(2, new { title = "No aggregate changes" })).EnsureSuccessStatusCode();
+            (await Update(2, new
+            {
+                title = "No aggregate changes"
+            })).EnsureSuccessStatusCode();
             // Full rebuild detects the external invalid formula and rolls back every changed parent total.
             var recalc = $"/api/admin/connections/{id}/tables/{parent}/sumups/recalculate";
             Assert.Equal(
                 HttpStatusCode.BadRequest,
                 (await admin.PostAsync(recalc, null)).StatusCode
             );
-            Assert.Equal(HttpStatusCode.BadRequest, (await Update(2, new { qty = 0 })).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Update(2, new
+            {
+                qty = 0
+            })).StatusCode);
             Assert.Equal(
                 "4",
                 (await Row(childApi, 2)).GetProperty("values").GetProperty("qty").ToString()
@@ -247,8 +274,11 @@ public partial class ApiTests
             // Presentation-only save is not a hidden full rebuild: external drift remains until explicitly repaired.
             cmd.CommandText = $"UPDATE `{parent}` SET total=100 WHERE id=42";
             await cmd.ExecuteNonQueryAsync();
-            fields[0] = fields[0] with { Label = "Renamed total" };
-            (await admin.PutAsJsonAsync(parentLayout, fields)).EnsureSuccessStatusCode();
+            fields[0] = fields[0] with
+            {
+                Label = "Renamed total"
+            };
+            await SaveConfiguration(admin, parentLayout, fields);
             await AssertTotals(42, 100, 1, 1);
             (await admin.PostAsync(recalc, null)).EnsureSuccessStatusCode();
             await AssertTotals(42, 3.5m, 1, 1);
@@ -278,8 +308,14 @@ public partial class ApiTests
                         parentApi + "/update",
                         new
                         {
-                            key = new { id = 42 },
-                            values = new { total = 99 },
+                            key = new
+                            {
+                                id = 42
+                            },
+                            values = new
+                            {
+                                total = 99
+                            },
                             version = p.GetProperty("version").GetString(),
                         }
                     )
@@ -292,8 +328,13 @@ public partial class ApiTests
                         parentApi + "/delete",
                         new
                         {
-                            key = new { id = 42 },
-                            values = new { },
+                            key = new
+                            {
+                                id = 42
+                            },
+                            values = new
+                            {
+                            },
                             version = p.GetProperty("version").GetString(),
                         }
                     )
@@ -302,17 +343,32 @@ public partial class ApiTests
             (
                 await admin.PostAsJsonAsync(
                     parentApi + "/create",
-                    new { values = new { id = 50, name = "Empty parent" } }
+                    new
+                    {
+                        values = new
+                        {
+                            id = 50,
+                            name = "Empty parent"
+                        }
+                    }
                 )
             ).EnsureSuccessStatusCode();
             await AssertTotals(50, 0, 0, 0);
             // Rebuild also recovers children entered before their parent existed.
-            cmd.CommandText = $"INSERT INTO `{child}`(parent_id,price,qty) VALUES(51,6,2)";
+            cmd.CommandText =
+                $"INSERT INTO `{child}`(parent_id,price,qty,datatype) VALUES(51,6,2,'default')";
             await cmd.ExecuteNonQueryAsync();
             (
                 await admin.PostAsJsonAsync(
                     parentApi + "/create",
-                    new { values = new { id = 51, name = "Late parent" } }
+                    new
+                    {
+                        values = new
+                        {
+                            id = 51,
+                            name = "Late parent"
+                        }
+                    }
                 )
             ).EnsureSuccessStatusCode();
             await AssertTotals(51, 3, 1, 1);
@@ -322,20 +378,24 @@ public partial class ApiTests
                     f.Name == "total"
                         ? f with
                         {
-                            Sumup = f.Sumup! with { SourceField = "title" },
+                            Sumup = f.Sumup! with
+                            {
+                                SourceField = "title"
+                            },
                         }
                         : f
                 )
                 .ToList();
             Assert.Equal(
                 HttpStatusCode.BadRequest,
-                (await admin.PutAsJsonAsync(parentLayout, invalid)).StatusCode
+                (await PutObjectConfiguration(admin, parentLayout, invalid)).StatusCode
             );
             await AssertTotals(42, 3.5m, 1, 1);
             Assert.Equal(
                 HttpStatusCode.BadRequest,
                 (
-                    await admin.PutAsJsonAsync(
+                    await PutObjectConfiguration(
+                        admin,
                         childLayout,
                         childFields.Where(f => f.Name != "parent_id").ToList()
                     )

@@ -11,6 +11,187 @@ namespace DbWeb.Tests;
 
 public partial class ApiTests
 {
+    [Theory]
+    [InlineData("{\"fields\":[{}]}")]
+    [InlineData("{\"fields\":[{\"name\":null}]}")]
+    [InlineData("{\"fields\":[{\"name\":\"\"}]}")]
+    [InlineData("{\"fields\":[{\"name\":\"   \"}]}")]
+    public void ObjectParserRejectsMissingNullAndBlankFieldNames(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+
+        var error = Assert.Throws<ApiError>(() => ObjectModel.ParseObject(document.RootElement));
+
+        Assert.Equal(400, error.Status);
+    }
+
+    [Theory]
+    [InlineData("required", "true")]
+    [InlineData("mask", "{\"pattern\":\"##-##\"}")]
+    public void LayoutParserRejectsDataTypeBehaviorWithoutLegacyShapeMarkers(
+        string property,
+        string value
+    )
+    {
+        using var document = JsonDocument.Parse(
+            $"{{\"fields\":[{{\"name\":\"title\",\"editorOrder\":0,\"{property}\":{value}}}]}}"
+        );
+
+        var error = Assert.Throws<ApiError>(() =>
+            ObjectModel.ValidateLegacyLayoutWrite(document.RootElement)
+        );
+
+        Assert.Equal(400, error.Status);
+    }
+
+    [Fact]
+    public async Task ObjectAndLayoutEndpointsRejectMalformedOwnershipPayloads()
+    {
+        var cs = Environment.GetEnvironmentVariable("MARIADB_TEST_CONNECTION");
+        if (string.IsNullOrEmpty(cs))
+        {
+            Assert.False(Environment.GetEnvironmentVariable("CI") == "true");
+            return;
+        }
+        await using var connection = new MySqlConnection(cs);
+        await connection.OpenAsync();
+        var table = "object_payloads_" + Guid.NewGuid().ToString("N");
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            $"CREATE TABLE `{table}`(id INT AUTO_INCREMENT PRIMARY KEY,title VARCHAR(80))";
+        await command.ExecuteNonQueryAsync();
+        try
+        {
+            using var factory = new Factory();
+            using var admin = factory.CreateClient();
+            await Login(admin);
+            var builder = new MySqlConnectionStringBuilder(cs);
+            var response = await admin.PostAsJsonAsync(
+                "/api/admin/connections",
+                new ConnectionInput(
+                    "Object payloads",
+                    builder.Server,
+                    builder.Port,
+                    builder.Database,
+                    builder.UserID,
+                    builder.Password,
+                    false
+                )
+            );
+            response.EnsureSuccessStatusCode();
+            var connectionId = (await response.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("id")
+                .GetInt32();
+            var root = $"/api/admin/connections/{connectionId}/tables/{table}";
+
+            foreach (var malformed in new object[]
+            {
+                new
+                {
+                    fields = new[]
+                    {
+                        new
+                        {
+                            label = "Missing name",
+                            readOnly = false,
+                            widget = "text"
+                        }
+                    }
+                },
+                new
+                {
+                    fields = new[]
+                    {
+                        new
+                        {
+                            name = (string?)null,
+                            label = "Null name",
+                            readOnly = false,
+                            widget = "text"
+                        }
+                    }
+                },
+                new
+                {
+                    fields = new[]
+                    {
+                        new
+                        {
+                            name = "   ",
+                            label = "Blank name",
+                            readOnly = false,
+                            widget = "text"
+                        }
+                    }
+                },
+            })
+                Assert.Equal(
+                    HttpStatusCode.BadRequest,
+                    (await admin.PutAsJsonAsync(root + "/object", malformed)).StatusCode
+                );
+
+            var presentation = new LayoutPresentation(
+                [
+                    new("id", Label: "ID"),
+                    new("title", EditorOrder: 1, ListOrder: 1, Label: "Title"),
+                ]
+            );
+            (await admin.PutAsJsonAsync(root + "/layout", presentation)).EnsureSuccessStatusCode();
+
+            foreach (var dataTypeSetting in new object[]
+            {
+                new
+                {
+                    fields = presentation.Fields.Select(field => new
+                    {
+                        field.Name,
+                        field.Section,
+                        field.EditorOrder,
+                        field.ShowInEditor,
+                        field.ShowInList,
+                        field.ListOrder,
+                        field.Label,
+                        required = field.Name == "title",
+                    })
+                },
+                new
+                {
+                    fields = presentation.Fields.Select(field => new
+                    {
+                        field.Name,
+                        field.Section,
+                        field.EditorOrder,
+                        field.ShowInEditor,
+                        field.ShowInList,
+                        field.ListOrder,
+                        field.Label,
+                        mask = field.Name == "title"
+                            ? new
+                            {
+                                pattern = "##-##"
+                            }
+                            : null,
+                    })
+                },
+            })
+            {
+                var rejected = await admin.PutAsJsonAsync(root + "/layout", dataTypeSetting);
+                Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+                var problem = await rejected.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Contains(
+                    "moved to Data Types",
+                    problem.GetProperty("title").GetString(),
+                    StringComparison.Ordinal
+                );
+            }
+        }
+        finally
+        {
+            command.CommandText = $"DROP TABLE `{table}`";
+            await command.ExecuteNonQueryAsync();
+        }
+    }
+
     [Fact]
     public void FormerSplitMetadataMovesSectionFromObjectToLayout()
     {
@@ -166,6 +347,24 @@ public partial class ApiTests
                 .GetProperty("id")
                 .GetInt32();
             var root = $"/api/admin/connections/{connectionId}/tables/{table}";
+            foreach (var malformed in new object[]
+            {
+                new
+                {
+                    fields = (object?)null
+                },
+                new
+                {
+                    fields = new object?[]
+                    {
+                        null
+                    }
+                },
+            })
+                Assert.Equal(
+                    HttpStatusCode.BadRequest,
+                    (await admin.PutAsJsonAsync(root + "/object", malformed)).StatusCode
+                );
             var legacy = new LayoutDefinition(
                 [
                     new("id", "ID", "Keys", 3, true, true, "auto", ShowInList: false),
@@ -209,8 +408,94 @@ public partial class ApiTests
                 ],
                 new(Label: "Object list", Sort: "title", Filters: [new("status", "eq", "a")])
             );
-            // Former combined clients continue to work, but persistence is normalized.
-            (await admin.PutAsJsonAsync(root + "/layout", legacy)).EnsureSuccessStatusCode();
+            // Former combined clients remain supported for settings not owned by Data Types.
+            var legacyWithoutDataTypeSettings = new
+            {
+                fields = legacy.Fields.Select(field => new
+                {
+                    field.Name,
+                    field.Label,
+                    field.Section,
+                    field.Order,
+                    field.Hidden,
+                    field.ReadOnly,
+                    field.Widget,
+                    field.Lookup,
+                    field.Options,
+                    field.ShowInList,
+                    field.ListOrder,
+                    field.Join,
+                    field.Formula,
+                    field.Sumup,
+                    field.CreationDefault,
+                }),
+                legacy.View,
+                legacy.SumupsPending,
+            };
+            (
+                await admin.PutAsJsonAsync(root + "/layout", legacyWithoutDataTypeSettings)
+            ).EnsureSuccessStatusCode();
+
+            var initialObject = (
+                await admin.GetFromJsonAsync<ObjectDefinition>(root + "/object")
+            )!;
+            initialObject = initialObject with
+            {
+                DataTypes = initialObject.DataTypes!
+                    .Select(type => type with
+                    {
+                        Fields = type.Fields.Select(field =>
+                                field.Name == "title"
+                                    ? field with
+                                    {
+                                        Required = true
+                                    }
+                                    : field
+                            )
+                            .ToList(),
+                    })
+                    .ToList(),
+            };
+            (
+                await admin.PutAsJsonAsync(root + "/object", initialObject)
+            ).EnsureSuccessStatusCode();
+
+            foreach (var dataTypeSetting in new object[]
+            {
+                new
+                {
+                    fields = new[]
+                    {
+                        new
+                        {
+                            name = "title",
+                            label = "Title",
+                            widget = "text",
+                            required = true,
+                        }
+                    }
+                },
+                new
+                {
+                    fields = new[]
+                    {
+                        new
+                        {
+                            name = "title",
+                            label = "Title",
+                            widget = "text",
+                            mask = new
+                            {
+                                pattern = "##-##"
+                            },
+                        }
+                    }
+                },
+            })
+                Assert.Equal(
+                    HttpStatusCode.BadRequest,
+                    (await admin.PutAsJsonAsync(root + "/layout", dataTypeSetting)).StatusCode
+                );
 
             var objectDefinition = (
                 await admin.GetFromJsonAsync<ObjectDefinition>(root + "/object")
@@ -219,7 +504,13 @@ public partial class ApiTests
                 "Title label",
                 objectDefinition.Fields.Single(f => f.Name == "title").Label
             );
-            Assert.True(objectDefinition.Fields.Single(f => f.Name == "title").Required);
+            Assert.False(objectDefinition.Fields.Single(f => f.Name == "title").Required);
+            Assert.True(
+                objectDefinition.DataTypes!
+                    .Single(type => type.Key == objectDefinition.DefaultDataTypeKey)
+                    .Fields.Single(field => field.Name == "title")
+                    .Required
+            );
             Assert.Equal("Object list", objectDefinition.View!.Label);
             var presentation = (
                 await admin.GetFromJsonAsync<LayoutPresentation>(root + "/layout")
@@ -341,7 +632,10 @@ public partial class ApiTests
             var clearedPresentation = presentation with
             {
                 Fields = presentation.Fields.Select(f =>
-                        f.Name == "title" ? f with { Label = "" } : f
+                        f.Name == "title" ? f with
+                        {
+                            Label = ""
+                        } : f
                     )
                     .ToList(),
             };
@@ -355,7 +649,10 @@ public partial class ApiTests
                 Fields = (
                     await admin.GetFromJsonAsync<ObjectDefinition>(root + "/object")
                 )!.Fields.Select(f =>
-                        f.Name == "title" ? f with { Label = "Stale object label" } : f
+                        f.Name == "title" ? f with
+                        {
+                            Label = "Stale object label"
+                        } : f
                     )
                     .ToList(),
             };

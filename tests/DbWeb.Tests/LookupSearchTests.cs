@@ -54,7 +54,7 @@ public partial class ApiTests
                 new("person_id", "Person", "", 0, false, false, "lookup", Lookup: lookup),
             ];
             var layoutPath = $"/api/admin/connections/{id}/tables/{dest}/layout";
-            (await admin.PutAsJsonAsync(layoutPath, fields)).EnsureSuccessStatusCode();
+            await SaveConfiguration(admin, layoutPath, fields);
             var path = $"/api/connections/{id}/tables/{dest}/records";
             async Task<JsonElement> Search(HttpClient client, string term, string more = "") =>
                 await client.GetFromJsonAsync<JsonElement>(
@@ -74,17 +74,14 @@ public partial class ApiTests
             {
                 Lookup = lookup with { Criteria = new ListView(Filters: [new("id", "eq", "42")]) },
             };
-            (await admin.PutAsJsonAsync(layoutPath, fields)).EnsureSuccessStatusCode();
+            await SaveConfiguration(admin, layoutPath, fields);
             Assert.Equal(2, (await Search(admin, "Team")).GetProperty("total").GetInt32());
-            (
-                await admin.PutAsJsonAsync(
-                    layoutPath,
-                    new LayoutDefinition(
-                        fields.ToList(),
-                        new ListView(Filters: [new("active", "eq", "1")])
-                    )
-                )
-            ).EnsureSuccessStatusCode();
+            await SaveConfiguration(
+                admin,
+                layoutPath,
+                fields,
+                new ListView(Filters: [new("active", "eq", "1")])
+            );
             Assert.Equal(1, (await Search(admin, "Team")).GetProperty("total").GetInt32());
             var added = await admin.PostAsJsonAsync(
                 "/api/admin/users",

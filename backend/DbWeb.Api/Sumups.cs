@@ -85,128 +85,128 @@ public static class Sumups
             layouts[replacementTable] = replacement!;
         var plans = new List<SumupPlan>();
         foreach (var (parentTable, layout) in layouts.OrderBy(x => x.Key, StringComparer.Ordinal))
-        foreach (
-            var field in layout
-                .Fields.Where(f => f.Widget == "sumup")
-                .OrderBy(f => f.Name, StringComparer.Ordinal)
-        )
-        {
-            var config = field.Sumup ?? throw new ApiError(400, "Sum-up configuration required.");
-            var parentColumns = await service.Columns(c, parentTable);
-            var target = parentColumns.Find(col => col.Name == field.Name);
-            if (
-                target == null
-                || !Numeric(target.Type)
-                || target.Type is "float" or "double"
-                || target.PrimaryKey
-                || target.Generated
-                || target.AutoIncrement
-                || !field.ReadOnly
-                || field.Required
+            foreach (
+                var field in layout
+                    .Fields.Where(f => f.Widget == "sumup")
+                    .OrderBy(f => f.Name, StringComparer.Ordinal)
             )
-                throw new ApiError(
-                    400,
-                    "Sum-ups require a read-only, non-key integer or DECIMAL destination column."
-                );
-            if (config.Operation is not "sum" and not "count")
-                throw new ApiError(400, "Choose count or sum.");
-            var childFields = layouts.GetValueOrDefault(config.ChildTable)?.Fields ?? [];
-            var relation =
-                childFields.Find(f =>
-                    f.Name == config.LookupField
-                    && f.Widget == "lookup"
-                    && f.Lookup?.Table == parentTable
-                )
-                ?? throw new ApiError(
-                    400,
-                    $"Sum-up {parentTable}.{field.Name} requires an existing child lookup to its parent."
-                );
-            var lookup = relation.Lookup!;
-            if (lookup.KeyColumn == field.Name)
-                throw new ApiError(400, "A sum-up cannot be its own relationship key.");
-            var childColumns = await service.Columns(c, config.ChildTable);
-            await service.ValidateLookup(
-                c,
-                lookup,
-                childColumns.Single(col => col.Name == relation.Name)
-            );
-            using var engine = new MySqlCommand(
-                "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN (@parent,@child) AND ENGINE <> 'InnoDB'",
-                c
-            );
-            engine.Parameters.AddWithValue("@parent", parentTable);
-            engine.Parameters.AddWithValue("@child", config.ChildTable);
-            if (Convert.ToInt32(await engine.ExecuteScalarAsync()) != 0)
-                throw new ApiError(
-                    400,
-                    "Sum-ups require InnoDB parent and child tables for transactional locking."
-                );
-            using var precision = new MySqlCommand(
-                "SELECT NUMERIC_PRECISION,NUMERIC_SCALE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=@table AND COLUMN_NAME=@column",
-                c
-            );
-            precision.Parameters.AddWithValue("@table", parentTable);
-            precision.Parameters.AddWithValue("@column", field.Name);
-            int scale;
-            await using (var reader = await precision.ExecuteReaderAsync())
             {
-                await reader.ReadAsync();
-                if (Convert.ToInt32(reader.GetValue(0)) > 28)
+                var config = field.Sumup ?? throw new ApiError(400, "Sum-up configuration required.");
+                var parentColumns = await service.Columns(c, parentTable);
+                var target = parentColumns.Find(col => col.Name == field.Name);
+                if (
+                    target == null
+                    || !Numeric(target.Type)
+                    || target.Type is "float" or "double"
+                    || target.PrimaryKey
+                    || target.Generated
+                    || target.AutoIncrement
+                    || !field.ReadOnly
+                    || field.Required
+                )
                     throw new ApiError(
                         400,
-                        "Use a sum-up destination with at most 28 digits of precision."
+                        "Sum-ups require a read-only, non-key integer or DECIMAL destination column."
                     );
-                scale = Convert.ToInt32(reader.GetValue(1));
-            }
-            Expression? expression = null;
-            if (config.Operation == "sum" && string.IsNullOrEmpty(config.SourceField))
-                throw new ApiError(400, "Choose a numeric child column or formula for sum.");
-            if (!string.IsNullOrEmpty(config.SourceField))
-            {
-                var sourceField = childFields.Find(f => f.Name == config.SourceField);
-                if (sourceField?.Widget == "formula")
+                if (config.Operation is not "sum" and not "count")
+                    throw new ApiError(400, "Choose count or sum.");
+                var childFields = layouts.GetValueOrDefault(config.ChildTable)?.Fields ?? [];
+                var relation =
+                    childFields.Find(f =>
+                        f.Name == config.LookupField
+                        && f.Widget == "lookup"
+                        && f.Lookup?.Table == parentTable
+                    )
+                    ?? throw new ApiError(
+                        400,
+                        $"Sum-up {parentTable}.{field.Name} requires an existing child lookup to its parent."
+                    );
+                var lookup = relation.Lookup!;
+                if (lookup.KeyColumn == field.Name)
+                    throw new ApiError(400, "A sum-up cannot be its own relationship key.");
+                var childColumns = await service.Columns(c, config.ChildTable);
+                await service.ValidateLookup(
+                    c,
+                    lookup,
+                    childColumns.Single(col => col.Name == relation.Name)
+                );
+                using var engine = new MySqlCommand(
+                    "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN (@parent,@child) AND ENGINE <> 'InnoDB'",
+                    c
+                );
+                engine.Parameters.AddWithValue("@parent", parentTable);
+                engine.Parameters.AddWithValue("@child", config.ChildTable);
+                if (Convert.ToInt32(await engine.ExecuteScalarAsync()) != 0)
+                    throw new ApiError(
+                        400,
+                        "Sum-ups require InnoDB parent and child tables for transactional locking."
+                    );
+                using var precision = new MySqlCommand(
+                    "SELECT NUMERIC_PRECISION,NUMERIC_SCALE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=@table AND COLUMN_NAME=@column",
+                    c
+                );
+                precision.Parameters.AddWithValue("@table", parentTable);
+                precision.Parameters.AddWithValue("@column", field.Name);
+                int scale;
+                await using (var reader = await precision.ExecuteReaderAsync())
                 {
-                    expression = Formulas.Compile(sourceField.Formula, childColumns, childFields);
-                    if (
-                        childFields.Any(f => f.Widget == "sumup")
-                        && expression
-                            .GetParameterNames()
-                            .Any(n => childColumns.Any(col => col.Name == n && col.Generated))
+                    await reader.ReadAsync();
+                    if (Convert.ToInt32(reader.GetValue(0)) > 28)
+                        throw new ApiError(
+                            400,
+                            "Use a sum-up destination with at most 28 digits of precision."
+                        );
+                    scale = Convert.ToInt32(reader.GetValue(1));
+                }
+                Expression? expression = null;
+                if (config.Operation == "sum" && string.IsNullOrEmpty(config.SourceField))
+                    throw new ApiError(400, "Choose a numeric child column or formula for sum.");
+                if (!string.IsNullOrEmpty(config.SourceField))
+                {
+                    var sourceField = childFields.Find(f => f.Name == config.SourceField);
+                    if (sourceField?.Widget == "formula")
+                    {
+                        expression = Formulas.Compile(sourceField.Formula, childColumns, childFields);
+                        if (
+                            childFields.Any(f => f.Widget == "sumup")
+                            && expression
+                                .GetParameterNames()
+                                .Any(n => childColumns.Any(col => col.Name == n && col.Generated))
+                        )
+                            throw new ApiError(
+                                400,
+                                "Formula sources on aggregate tables cannot reference database-generated columns with untracked dependencies."
+                            );
+                        if (
+                            expression
+                                .GetParameterNames()
+                                .Any(n => childFields.Any(f => f.Name == n && f.Widget == "sumup"))
+                        )
+                            throw new ApiError(400, "Sum-up sources cannot depend on other sum-ups.");
+                    }
+                    else if (
+                        (
+                            childFields.Any(f => f.Widget == "sumup")
+                            && childColumns.Any(col => col.Name == config.SourceField && col.Generated)
+                        )
+                        || !childColumns.Any(col => col.Name == config.SourceField && Numeric(col.Type))
+                        || sourceField?.Widget == "sumup"
                     )
                         throw new ApiError(
                             400,
-                            "Formula sources on aggregate tables cannot reference database-generated columns with untracked dependencies."
+                            "Sum-up source must be a numeric child column or an independent child formula."
                         );
-                    if (
-                        expression
-                            .GetParameterNames()
-                            .Any(n => childFields.Any(f => f.Name == n && f.Widget == "sumup"))
-                    )
-                        throw new ApiError(400, "Sum-up sources cannot depend on other sum-ups.");
                 }
-                else if (
-                    (
-                        childFields.Any(f => f.Widget == "sumup")
-                        && childColumns.Any(col => col.Name == config.SourceField && col.Generated)
+                if (
+                    layout.Fields.Any(f =>
+                        f.Lookup?.CopyMappings?.Any(m => m.DestinationColumn == field.Name) == true
                     )
-                    || !childColumns.Any(col => col.Name == config.SourceField && Numeric(col.Type))
-                    || sourceField?.Widget == "sumup"
                 )
-                    throw new ApiError(
-                        400,
-                        "Sum-up source must be a numeric child column or an independent child formula."
-                    );
+                    throw new ApiError(400, "Lookup copy mappings cannot write sum-up destinations.");
+                plans.Add(
+                    new(parentTable, field, lookup, childColumns, childFields, scale, expression)
+                );
             }
-            if (
-                layout.Fields.Any(f =>
-                    f.Lookup?.CopyMappings?.Any(m => m.DestinationColumn == field.Name) == true
-                )
-            )
-                throw new ApiError(400, "Lookup copy mappings cannot write sum-up destinations.");
-            plans.Add(
-                new(parentTable, field, lookup, childColumns, childFields, scale, expression)
-            );
-        }
         return plans;
     }
 
@@ -243,12 +243,18 @@ public static class Sumups
             await service.RebuildSumups(c, tx, plans);
             await tx.CommitAsync();
             foreach (var layout in layouts)
+            {
+                var stored = ObjectModel.Stored(layout.FieldsJson);
                 layout.FieldsJson = ObjectModel.Serialize(
-                    DatabaseService.Layout(layout.FieldsJson) with
+                    stored with
                     {
-                        SumupsPending = false,
+                        Object = stored.Object with
+                        {
+                            SumupsPending = false
+                        },
                     }
                 );
+            }
             await db.SaveChangesAsync();
         }
         return plans;
@@ -261,9 +267,10 @@ public static class Sumups
         MySqlConnection c,
         int connection,
         RecordLayout layout,
-        LayoutDefinition definition
+        StoredObjectDefinition definition
     )
     {
+        var merged = ObjectModel.Merge(definition);
         List<SumupPlan> previous = [];
         var pending = (
             await db.Layouts.AsNoTracking().Where(l => l.ConnectionId == connection).ToListAsync()
@@ -276,7 +283,7 @@ public static class Sumups
             catch (ApiError)
             { /* An administrator must be able to repair stale schema/configuration. */
             }
-        var plans = await Plans(db, service, c, connection, layout.Table, definition);
+        var plans = await Plans(db, service, c, connection, layout.Table, merged);
         static string Signature(SumupPlan p) =>
             JsonSerializer.Serialize(
                 new
@@ -290,7 +297,7 @@ public static class Sumups
                         {
                             f.Name,
                             f.Formula,
-                            f.Options,
+                            Options = f.Options,
                         }),
                 }
             );
@@ -308,14 +315,25 @@ public static class Sumups
         layout.FieldsJson = ObjectModel.Serialize(
             definition with
             {
-                SumupsPending = plans.Count > 0,
+                Object = definition.Object with
+                {
+                    SumupsPending = plans.Count > 0
+                },
             }
         );
         await db.SaveChangesAsync();
         await tx.CommitAsync();
         if (plans.Count > 0)
         {
-            layout.FieldsJson = ObjectModel.Serialize(definition with { SumupsPending = false });
+            layout.FieldsJson = ObjectModel.Serialize(
+                definition with
+                {
+                    Object = definition.Object with
+                    {
+                        SumupsPending = false
+                    },
+                }
+            );
             await db.SaveChangesAsync();
         }
     }

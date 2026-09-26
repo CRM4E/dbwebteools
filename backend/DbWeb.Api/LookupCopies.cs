@@ -30,6 +30,7 @@ public partial class DatabaseService
                     || destination.Generated
                     || destination.AutoIncrement
                     || destination.PrimaryKey
+                    || DataTypeColumn.Is(destination.Name)
                     || destination.Name == field.Name
                     || fields.Any(f =>
                         f.Name == destination.Name && f.Widget is "lookup" or "sumup"

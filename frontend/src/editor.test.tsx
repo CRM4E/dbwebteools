@@ -571,6 +571,7 @@ describe("Date, timestamp and dropdown controls", () => {
               { key: "draft", display: "Draft document" },
               { key: "ready", display: "Ready to publish" },
             ],
+            enabledOptionKeys: ["ready"],
           },
         ]}
         row={null}
@@ -581,10 +582,51 @@ describe("Date, timestamp and dropdown controls", () => {
     expect(
       screen.getByRole("option", { name: "Ready to publish" }),
     ).toBeTruthy();
+    expect(screen.queryByRole("option", { name: "Draft document" })).toBeNull();
     fireEvent.change(screen.getByLabelText("Status"), {
       target: { value: "ready" },
     });
     fireEvent.click(screen.getByText("Save record"));
     await waitFor(() => expect(save).toHaveBeenCalledWith({ name: "ready" }));
+  });
+
+  it("shows a disabled existing dropdown label but rejects it as a new choice", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const field = {
+      name: "name", label: "Status", section: "", order: 0, hidden: false,
+      readOnly: false, widget: "dropdown", enabledOptionKeys: ["ready"],
+      options: [
+        { key: "draft", display: "Draft document" },
+        { key: "ready", display: "Ready to publish" },
+      ],
+    };
+    render(
+      <RecordEditor
+        columns={[columns[1]]}
+        fields={[field]}
+        row={{ values: { name: "draft" }, version: "v1" }}
+        close={() => {}}
+        save={save}
+      />,
+    );
+    const legacy = screen.getByRole("option", { name: "Draft document (not available)" }) as HTMLOptionElement;
+    expect(legacy.disabled).toBe(true);
+    cleanup();
+
+    render(
+      <RecordEditor
+        columns={[columns[1]]}
+        fields={[field]}
+        row={null}
+        initialValues={{ name: "draft" }}
+        close={() => {}}
+        save={save}
+      />,
+    );
+    fireEvent.click(screen.getByText("Save record"));
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Status is not an enabled dropdown value.",
+    );
+    expect(save).not.toHaveBeenCalled();
   });
 });

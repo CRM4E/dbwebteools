@@ -101,167 +101,179 @@ describe("Object field workflow", () => {
     );
   });
 
-  it("configures an exact positional mask and saves it in object metadata", async () => {
-    mockApi();
-    render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
-    await screen.findByText("varchar(100)");
-    fireEvent.click(screen.getByRole("button", { name: "Edit field title" }));
-    expect(screen.queryByLabelText("Input mask type")).toBeNull();
-    expect(screen.queryByLabelText("Allowed mask characters")).toBeNull();
-    const patternInput = screen.getByLabelText("Input mask pattern");
-    expect(patternInput.getAttribute("aria-describedby")).toContain("input-mask-pattern-help");
-    fireEvent.change(patternInput, { target: { value: "?" } });
-    expect(patternInput.getAttribute("aria-invalid")).toBe("true");
-    expect(screen.getByRole("alert").textContent).toContain(
-      "An optional marker must follow a mask position.",
-    );
-    expect(
-      (screen.getByRole("button", { name: "Save field" }) as HTMLButtonElement).disabled,
-    ).toBe(true);
-    fireEvent.change(patternInput, {
-      target: { value: "AA-##?" },
-    });
-    expect(screen.getByText(/User tip: Format: AA-##\?/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Save field" }));
-    await waitFor(() =>
-      expect(api).toHaveBeenCalledWith(
-        "/admin/connections/1/tables/things/object",
-        "PUT",
-        expect.objectContaining({
-          fields: expect.arrayContaining([
-            expect.objectContaining({
-              name: "title",
-              mask: { pattern: "AA-##?" },
-            }),
-          ]),
-        }),
-      ),
-    );
-  });
-
-  it("offers a numbers-only mask without exposing legacy character rules", async () => {
-    mockApi();
-    render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
-    await screen.findByText("varchar(100)");
-    fireEvent.click(screen.getByRole("button", { name: "Edit field title" }));
-    fireEvent.click(screen.getByLabelText("Numbers only"));
-    expect(screen.getByText(/User tip: Use at least 1 characters. Allowed: numbers/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Save field" }));
-    await waitFor(() =>
-      expect(api).toHaveBeenCalledWith(
-        "/admin/connections/1/tables/things/object",
-        "PUT",
-        expect.objectContaining({
-          fields: expect.arrayContaining([
-            expect.objectContaining({
-              name: "title",
-              mask: {
-                characterSet: "digits",
-                minimumLength: 1,
-                requiredCharacters: "",
-              },
-            }),
-          ]),
-        }),
-      ),
-    );
-  });
-
-  it("identifies and removes a legacy custom rule without misrepresenting it", async () => {
+  it("moves required and mask controls into the default data type", async () => {
     mockApi({
       ...definition,
       fields: definition.fields.map((field) =>
         field.name === "title"
-          ? {
-              ...field,
-              mask: {
-                characterSet: "digits",
-                minimumLength: 6,
-                requiredCharacters: "-",
-              },
-            }
+          ? { ...field, required: true, mask: { pattern: "AA-##?" } }
           : field,
       ),
     });
     render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
     await screen.findByText("varchar(100)");
     fireEvent.click(screen.getByRole("button", { name: "Edit field title" }));
-    expect((screen.getByLabelText("Numbers only") as HTMLInputElement).checked).toBe(false);
-    expect(screen.getByText(/Existing custom rule: Use at least 6 characters/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Remove input mask" }));
-    expect(screen.queryByRole("button", { name: "Remove input mask" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Save field" }));
+    expect(screen.queryByLabelText("title required")).toBeNull();
+    expect(screen.queryByLabelText("Input mask pattern")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Configure title for Default" }));
+    expect((screen.getByLabelText("Required") as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText("Input mask pattern") as HTMLInputElement).value).toBe("AA-##?");
+    fireEvent.change(screen.getByLabelText("Input mask pattern"), { target: { value: "###" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save field settings" }));
     await waitFor(() =>
       expect(api).toHaveBeenCalledWith(
         "/admin/connections/1/tables/things/object",
         "PUT",
         expect.objectContaining({
           fields: expect.arrayContaining([
-            expect.objectContaining({ name: "title", mask: null }),
+            expect.not.objectContaining({ required: expect.anything(), mask: expect.anything() }),
+          ]),
+          defaultDataTypeKey: "default",
+          dataTypes: expect.arrayContaining([
+            expect.objectContaining({
+              key: "default",
+              fields: expect.arrayContaining([
+                expect.objectContaining({ name: "title", required: true, mask: { pattern: "###" } }),
+              ]),
+            }),
           ]),
         }),
       ),
     );
   });
 
-  it("creates a required email as non-null VARCHAR(255) without an Allow NULL control", async () => {
+  it("refreshes the schema token after saving data types before resizing a field", async () => {
+    let schemaReads = 0;
+    vi.mocked(api).mockImplementation(async (url, method = "GET") => {
+      if (url === "/connections/1/tables") return ["things"] as never;
+      if (
+        url === "/admin/connections/1/schema/tables/things" &&
+        method === "GET"
+      ) {
+        schemaReads++;
+        return {
+          ...schema,
+          version: schemaReads === 1 ? "v1" : "v2",
+          columns: schemaReads === 1
+            ? schema.columns
+            : [
+                ...schema.columns,
+                {
+                  name: "datatype",
+                  type: "varchar",
+                  sqlType: "varchar(64)",
+                  nullable: false,
+                  primaryKey: false,
+                  autoIncrement: false,
+                  generated: false,
+                  length: 64,
+                  precision: null,
+                  scale: null,
+                  default: "default",
+                  relatedTable: null,
+                  relatedKey: null,
+                  uniqueKey: false,
+                  editBlocked: "Managed by Data Types.",
+                },
+              ],
+        } as never;
+      }
+      if (url.endsWith("/tables/things/object") && method === "GET")
+        return definition as never;
+      if (url.endsWith("/modify-column") && method === "POST")
+        return { ...schema, version: "v3" } as never;
+      return undefined as never;
+    });
+
+    render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
+    await screen.findByText("varchar(100)");
+
+    fireEvent.click(screen.getByRole("button", { name: "Configure title for Default" }));
+    fireEvent.click(screen.getByLabelText("Required"));
+    fireEvent.click(screen.getByRole("button", { name: "Save field settings" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(schemaReads).toBe(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit field title" }));
+    fireEvent.change(screen.getByLabelText("Text length"), {
+      target: { value: "120" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save field" }));
+
+    await waitFor(() =>
+      expect(api).toHaveBeenCalledWith(
+        "/admin/connections/1/schema/tables/things/modify-column",
+        "POST",
+        expect.objectContaining({ name: "title", length: 120, version: "v2" }),
+      ),
+    );
+  });
+
+  it("adds a type, preserves its immutable key while editing, and makes it default", async () => {
+    mockApi();
+    render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
+    await screen.findByText("varchar(100)");
+    fireEvent.click(screen.getByRole("button", { name: "Add data type" }));
+    fireEvent.change(screen.getByLabelText("Data type key"), { target: { value: "invoice" } });
+    fireEvent.change(screen.getByLabelText("Data type label"), { target: { value: "Invoice" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save data type" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add data type" })).toBeNull());
+    expect(api).toHaveBeenCalledWith(
+      "/admin/connections/1/tables/things/object",
+      "PUT",
+      expect.objectContaining({
+        defaultDataTypeKey: "default",
+        dataTypes: expect.arrayContaining([expect.objectContaining({ key: "invoice", label: "Invoice" })]),
+      }),
+    );
+  });
+
+  it("creates new object fields as nullable and represents them in every data type", async () => {
     mockApi();
     render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
     await screen.findByText("varchar(100)");
     fireEvent.click(screen.getByRole("button", { name: "Add field" }));
-    expect(screen.queryByText("Allow NULL (empty values)")).toBeNull();
     fireEvent.change(screen.getByLabelText("Field name"), { target: { value: "email" } });
     fireEvent.change(screen.getByLabelText("Control / behavior"), { target: { value: "email" } });
-    expect(screen.queryByLabelText("Text length")).toBeNull();
-    fireEvent.click(screen.getByLabelText("email required"));
+    expect(screen.queryByLabelText("email required")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Create field" }));
     await waitFor(() =>
       expect(api).toHaveBeenCalledWith(
         "/admin/connections/1/schema/tables/things/columns",
         "POST",
-        expect.objectContaining({
-          name: "email",
-          type: "text",
-          length: 255,
-          nullable: false,
-        }),
+        expect.objectContaining({ name: "email", type: "text", length: 255, nullable: true }),
       ),
     );
     expect(api).toHaveBeenCalledWith(
       "/admin/connections/1/tables/things/object",
       "PUT",
       expect.objectContaining({
-        fields: expect.arrayContaining([
-          expect.objectContaining({ name: "email", widget: "email", required: true }),
+        dataTypes: expect.arrayContaining([
+          expect.objectContaining({ fields: expect.arrayContaining([expect.objectContaining({ name: "email" })]) }),
         ]),
       }),
     );
   });
 
-  it("reconciles a legacy optional field with a non-null database column", async () => {
+  it("does not derive database nullability from legacy object required metadata", async () => {
     vi.mocked(api).mockImplementation(async (url, method = "GET") => {
       if (url === "/connections/1/tables") return ["things"] as never;
       if (url.includes("/schema/tables/things"))
-        return {
-          ...schema,
-          columns: schema.columns.map((column) =>
-            column.name === "title" ? { ...column, nullable: false } : column,
-          ),
-        } as never;
-      if (url.endsWith("/tables/things/object") && method === "GET")
-        return definition as never;
+        return { ...schema, columns: schema.columns.map((column) => column.name === "title" ? { ...column, nullable: false } : column) } as never;
+      if (url.endsWith("/tables/things/object") && method === "GET") return definition as never;
       return undefined as never;
     });
     render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
     await screen.findByText("varchar(100)");
     fireEvent.click(screen.getByRole("button", { name: "Edit field title" }));
     fireEvent.click(screen.getByRole("button", { name: "Save field" }));
-    await waitFor(() =>
-      expect(api).toHaveBeenCalledWith(
-        "/admin/connections/1/schema/tables/things/modify-column",
-        "POST",
-        expect.objectContaining({ name: "title", nullable: true }),
-      ),
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(api).not.toHaveBeenCalledWith(
+      "/admin/connections/1/schema/tables/things/modify-column",
+      "POST",
+      expect.anything(),
     );
   });
 

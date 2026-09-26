@@ -88,7 +88,7 @@ public partial class ApiTests
                     Formula = "Concat(Upper([copied_name]), ' x', [qty])",
                 },
             ];
-            (await admin.PutAsJsonAsync(layoutPath, fields)).EnsureSuccessStatusCode();
+            await SaveConfiguration(admin, layoutPath, fields);
             var preview = await admin.PostAsJsonAsync(
                 path + "/lookups/source_id/copy",
                 new { key = "42" }
@@ -201,9 +201,18 @@ public partial class ApiTests
                     )
                 ).StatusCode
             );
-            Assert.Equal(version, (await Row()).GetProperty("version").GetString());
+            var unchanged = await Row();
+            Assert.Equal(
+                "Changed source",
+                unchanged.GetProperty("values").GetProperty("copied_name").GetString()
+            );
+            Assert.Equal(
+                "50.0000",
+                unchanged.GetProperty("values").GetProperty("copied_price").GetString()
+            );
+            version = unchanged.GetProperty("version").GetString();
             fields[1] = fields[1] with { Required = false };
-            (await admin.PutAsJsonAsync(layoutPath, fields)).EnsureSuccessStatusCode();
+            await SaveConfiguration(admin, layoutPath, fields);
             (
                 await admin.PostAsJsonAsync(
                     path + "/update",
@@ -242,7 +251,7 @@ public partial class ApiTests
                     CopyMappings = [new("name", "copied_name", true), new("price", "copied_price")],
                 },
             };
-            (await admin.PutAsJsonAsync(layoutPath, fields)).EnsureSuccessStatusCode();
+            await SaveConfiguration(admin, layoutPath, fields);
             // Editable override survives same-request lookup selection, including explicit NULL.
             (
                 await admin.PostAsJsonAsync(
@@ -379,7 +388,7 @@ public partial class ApiTests
             )
                 Assert.Equal(
                     HttpStatusCode.BadRequest,
-                    (await admin.PutAsJsonAsync(layoutPath, new[] { invalid })).StatusCode
+                    (await PutObjectConfiguration(admin, layoutPath, new[] { invalid })).StatusCode
                 );
             foreach (
                 var mappings in new List<LookupCopyMapping>[]
@@ -394,7 +403,8 @@ public partial class ApiTests
                 Assert.Equal(
                     HttpStatusCode.BadRequest,
                     (
-                        await admin.PutAsJsonAsync(
+                        await PutObjectConfiguration(
+                            admin,
                             layoutPath,
                             new[]
                             {

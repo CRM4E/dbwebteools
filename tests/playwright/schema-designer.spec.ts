@@ -111,12 +111,26 @@ test("design tables through field dialogs, persist edits and delete metadata", a
   dialog = await startField("email", "email");
   await expect(dialog.getByLabel("Text length", { exact: true })).toHaveCount(0);
   await expect(dialog.getByText("Allow NULL", { exact: false })).toHaveCount(0);
-  const readOnlyBounds = await dialog.getByLabel("email readOnly", { exact: true }).boundingBox();
-  const requiredBounds = await dialog.getByLabel("email required", { exact: true }).boundingBox();
-  expect(Math.abs(readOnlyBounds!.y - requiredBounds!.y)).toBeLessThan(2);
-  await dialog.getByLabel("email required", { exact: true }).check();
+  await expect(dialog.getByLabel("email readOnly", { exact: true })).toBeVisible();
+  await expect(dialog.getByLabel("email required", { exact: true })).toHaveCount(0);
+  await expect(
+    dialog.getByText(
+      "Field requirements and input masks are configured separately for each data type.",
+      { exact: true },
+    ),
+  ).toBeVisible();
   await createField(dialog);
   await expect(page.getByRole("region", { name: "Object definition" })).toContainText("varchar(255)");
+  const dataTypes = page.getByLabel("Data types");
+  await dataTypes.getByLabel("Configure email for Default").click();
+  const emailSettings = page.getByRole("dialog", {
+    name: "Data type field settings",
+  });
+  await emailSettings.getByLabel("Required", { exact: true }).check();
+  await emailSettings
+    .getByRole("button", { name: "Save field settings" })
+    .click();
+  await expect(emailSettings).toHaveCount(0);
 
   // Deletion has an explicit cancel path and removes both schema and object metadata on confirm.
   dialog = await startField("temporary_note", "text");

@@ -131,7 +131,9 @@ public static class SchemaDesigner
                 var extra = r.GetString(5);
                 var type = r.GetString(1);
                 var blocked =
-                    r.GetString(4) == "PRI" || extra.Contains("auto_increment")
+                    DataTypeColumn.Is(r.GetString(0))
+                        ? "The datatype column is managed by the backend."
+                    : r.GetString(4) == "PRI" || extra.Contains("auto_increment")
                         ? "Primary keys are managed outside the designer."
                     : extra.Contains("GENERATED")
                         ? "Generated columns are managed outside the designer."
@@ -251,6 +253,8 @@ public static class SchemaDesigner
     public static async Task DropColumn(MySqlConnection c, string table, string column)
     {
         Name(column);
+        if (DataTypeColumn.Is(column))
+            throw new ApiError(400, "The datatype column is managed by the backend.");
         var foreignKeys = new List<string>();
         using (var command = new MySqlCommand(
             "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=@table AND COLUMN_NAME=@column AND REFERENCED_TABLE_NAME IS NOT NULL",
@@ -288,6 +292,8 @@ public static class SchemaDesigner
             {
                 Name(input.Name);
                 Name(input.PrimaryKey);
+                if (DataTypeColumn.Is(input.PrimaryKey))
+                    throw new ApiError(400, "The datatype column is managed by the backend.");
                 var config =
                     await db.Connections.FindAsync(id)
                     ?? throw new ApiError(404, "Connection not found.");
@@ -296,7 +302,7 @@ public static class SchemaDesigner
                 await Strict(c);
                 await Execute(
                     c,
-                    $"CREATE TABLE {Quote(input.Name)} ({Quote(input.PrimaryKey)} BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+                    $"CREATE TABLE {Quote(input.Name)} ({Quote(input.PrimaryKey)} BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, {Quote(DataTypeColumn.Name)} VARCHAR(64) NOT NULL DEFAULT 'default') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
                 );
                 db.Audit.Add(
                     new()
@@ -324,6 +330,8 @@ public static class SchemaDesigner
                 ) =>
                 {
                     Name(input.Name);
+                    if (DataTypeColumn.Is(input.Name))
+                        throw new ApiError(400, "The datatype column is managed by the backend.");
                     var config =
                         await db.Connections.FindAsync(id)
                         ?? throw new ApiError(404, "Connection not found.");
@@ -498,23 +506,27 @@ public static class SchemaDesigner
                         );
                         if (layout == null)
                         {
-                            layout = new() { ConnectionId = id, Table = table };
+                            layout = new()
+                            {
+                                ConnectionId = id,
+                                Table = table
+                            };
                             db.Layouts.Add(layout);
                         }
-                        var definitionLayout = Layout(layout.FieldsJson);
-                        definitionLayout.Fields.Add(
+                        var stored = ObjectModel.Stored(layout.FieldsJson);
+                        stored.Object.Fields.Add(
+                            new(input.Name, input.Name, false, "lookup", Lookup: lookup)
+                        );
+                        stored.Layout.Fields.Add(
                             new(
                                 input.Name,
-                                input.Name,
-                                "",
-                                schema.Columns.Count,
-                                false,
-                                false,
-                                "lookup",
-                                Lookup: lookup
+                                EditorOrder: schema.Columns.Count,
+                                ListOrder: schema.Columns.Count,
+                                Label: input.Name
                             )
                         );
-                        layout.FieldsJson = ObjectModel.Serialize(definitionLayout);
+                        stored = ObjectModel.Normalize(stored);
+                        layout.FieldsJson = ObjectModel.Serialize(stored);
                     }
                     db.Audit.Add(
                         new()

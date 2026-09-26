@@ -34,8 +34,8 @@ public static class RecordWrites
                 f.Widget == "lookup" && f.Lookup != null && values.ContainsKey(f.Name)
             )
         )
-        foreach (var copied in await service.CopyLookupValues(c, field.Lookup!, values[field.Name]))
-            values[copied.Key] = copied.Value;
+            foreach (var copied in await service.CopyLookupValues(c, field.Lookup!, values[field.Name]))
+                values[copied.Key] = copied.Value;
         LayoutRules.ValidateMaskValues(fields, values);
         return values;
     }
@@ -57,11 +57,31 @@ public static class RecordWrites
             var layout = await db.Layouts.SingleOrDefaultAsync(x =>
                 x.ConnectionId == id && x.Table == table
             );
-            fields = DatabaseService.LayoutFields(layout?.FieldsJson);
+            var stored = ObjectModel.Stored(layout?.FieldsJson);
+            fields = ObjectModel.Merge(stored).Fields;
+            var columns = await s.Columns(c, table);
+            var hasManagedDataType = columns.Any(column => DataTypeColumn.Is(column.Name));
+            if (
+                op == "create"
+                && (
+                    hasManagedDataType
+                    || ObjectModel.HasCanonicalDataTypes(layout?.FieldsJson)
+                )
+            )
+                DataTypeColumn.RequireReady(columns);
+            if (hasManagedDataType)
+            {
+                if (input.Values.Keys.Any(DataTypeColumn.Is))
+                    throw new ApiError(400, "datatype is managed by the backend and cannot be edited.");
+                if (op == "create")
+                    input.Values[DataTypeColumn.Name] = JsonSerializer.SerializeToElement(
+                        stored.Object.DefaultDataTypeKey!
+                    );
+            }
             if (op == "create")
                 DatabaseService.ApplyCreationDefaults(
                     fields,
-                    await s.Columns(c, table),
+                    columns,
                     input.Values
                 );
             if (

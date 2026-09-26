@@ -150,22 +150,19 @@ public partial class ApiTests
                     Formula: "Concat([title], ': ', DropdownDisplay('status',[status]))"
                 ),
             };
-            (
-                await admin.PutAsJsonAsync(
-                    $"/api/admin/connections/{connection}/tables/{children}/layout",
-                    new LayoutDefinition(
-                        childFields,
-                        new ListView(
-                            Match: "any",
-                            Filters:
-                            [
-                                new("status", "eq", "a"),
-                                new("title", "eq", "Foreign sentinel"),
-                            ]
-                        )
-                    )
+            await SaveConfiguration(
+                admin,
+                $"/api/admin/connections/{connection}/tables/{children}/layout",
+                childFields,
+                new ListView(
+                    Match: "any",
+                    Filters:
+                    [
+                        new("status", "eq", "a"),
+                        new("title", "eq", "Foreign sentinel"),
+                    ]
                 )
-            ).EnsureSuccessStatusCode();
+            );
             var parentPage = await Create(
                 parents,
                 "Customer",
