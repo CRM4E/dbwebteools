@@ -117,6 +117,12 @@ export function maskRegexPattern(mask: InputMask): string | undefined {
   }).join("");
 }
 
+export function maskRegexMatches(mask: InputMask, value: string): boolean {
+  if (value === "") return true;
+  const pattern = maskRegexPattern(mask);
+  return pattern == null || new RegExp("^(?:" + pattern + ")$").test(value);
+}
+
 function exactMaskMatches(tokens: ExactToken[], value: string): boolean {
   let positions = new Set([0]);
   for (const token of tokens) {

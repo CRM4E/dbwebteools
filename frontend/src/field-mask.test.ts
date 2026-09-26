@@ -3,6 +3,7 @@ import {
   maskConfigurationError,
   maskMaximumLength,
   maskMinimumLength,
+  maskRegexMatches,
   maskRegexPattern,
   maskValueError,
 } from "./field-mask";
@@ -19,6 +20,11 @@ describe("exact field masks", () => {
     expect(maskRegexPattern(mask)).toBe(
       "[A-Za-z][A-Za-z]\\x2d[0-9](?:[0-9])?",
     );
+    expect(maskRegexMatches(mask, "AB-1")).toBe(true);
+    expect(maskRegexMatches(mask, "AB-12")).toBe(true);
+    expect(maskRegexMatches(mask, "AB-A")).toBe(false);
+    expect(maskRegexMatches(mask, "AB-１")).toBe(false);
+    expect(maskRegexMatches(mask, "AB-١")).toBe(false);
   });
 
   it("allows optional literals without greedy position loss", () => {

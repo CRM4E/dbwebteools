@@ -48,6 +48,7 @@ import { PageEditor } from "./page-editor";
 import {
   maskMaximumLength,
   maskMinimumLength,
+  maskRegexMatches,
   maskRegexPattern,
   maskTip,
   maskValueError,
@@ -1234,6 +1235,21 @@ export function RecordEditor({
                           ? maskMaximumLength(l.mask)
                           : undefined
                       }
+                      {...(l?.mask && (!row || values[c.name] !== row.values[c.name])
+                        ? { pattern: maskRegexPattern(l.mask) }
+                        : {})}
+                      onInvalid={(event) => {
+                        if (
+                          l?.mask &&
+                          (!row || values[c.name] !== row.values[c.name]) &&
+                          maskRegexPattern(l.mask)
+                        ) {
+                          event.preventDefault();
+                          setError(
+                            `${l.label || c.name} must match the input mask. ${maskTip(l.mask)}`,
+                          );
+                        }
+                      }}
                       title={l?.mask ? maskTip(l.mask) : undefined}
                       required={
                         !disabled &&
@@ -1243,15 +1259,26 @@ export function RecordEditor({
                       }
                       disabled={disabled}
                       value={String(values[c.name] ?? "")}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const activeMask =
+                          l?.mask && (!row || e.target.value !== row.values[c.name])
+                            ? l.mask
+                            : undefined;
+                        e.currentTarget.setCustomValidity(
+                          activeMask &&
+                            maskRegexPattern(activeMask) &&
+                            !maskRegexMatches(activeMask, e.target.value)
+                            ? maskTip(activeMask)
+                            : "",
+                        );
                         setValues({
                           ...values,
                           [c.name]:
                             c.nullable && e.target.value === ""
                               ? null
                               : e.target.value,
-                        })
-                      }
+                        });
+                      }}
                     />
                   ) : l?.widget === "checkbox" && c.nullable ? (
                     <select
