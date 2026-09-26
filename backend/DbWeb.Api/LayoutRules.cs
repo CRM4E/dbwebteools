@@ -254,7 +254,10 @@ public static class LayoutRules
             }
             if (index + 1 < pattern.Length && pattern[index + 1] == '?')
             {
-                token = token with { Required = false };
+                token = token with
+                {
+                    Required = false
+                };
                 index++;
             }
             hasPlaceholder |= token.Kind != MaskTokenKind.Literal;
@@ -339,7 +342,16 @@ public static class LayoutRules
                 && value.ValueKind != JsonValueKind.Null
                 && (
                     value.ValueKind != JsonValueKind.String
-                    || field.Options?.Any(o => o.Key == value.GetString()) != true
+                    || field.Options?.Any(o =>
+                        o.Key == value.GetString()
+                        && (
+                            field.EnabledOptionKeys == null
+                            || field.EnabledOptionKeys.Contains(
+                                o.Key,
+                                StringComparer.OrdinalIgnoreCase
+                            )
+                        )
+                    ) != true
                 )
             )
                 throw new ApiError(400, $"Choose a configured dropdown value for {field.Name}.");
@@ -370,7 +382,11 @@ public static class LayoutRules
 
     public static void AddDropdownLabels(List<LayoutField> fields, List<RecordRow> rows)
     {
-        foreach (var field in fields.Where(f => f.Widget == "dropdown" && f.Options != null))
+        foreach (
+            var field in fields.Where(f =>
+                f.Widget == "dropdown" && f.Options != null
+            )
+        )
         {
             var labels = field.Options!.ToDictionary(
                 o => o.Key,

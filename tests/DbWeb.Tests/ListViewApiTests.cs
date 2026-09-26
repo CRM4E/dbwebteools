@@ -63,12 +63,7 @@ public partial class ApiTests
                 ),
             };
             async Task Save(ListView view) =>
-                (
-                    await client.PutAsJsonAsync(
-                        layoutPath,
-                        new LayoutDefinition(fields.ToList(), view)
-                    )
-                ).EnsureSuccessStatusCode();
+                await SaveConfiguration(client, layoutPath, fields, view);
             async Task<JsonElement> Rows(string query = "") =>
                 await client.GetFromJsonAsync<JsonElement>(path + "/records" + query);
             int[] Ids(JsonElement page) =>
@@ -103,8 +98,11 @@ public partial class ApiTests
             Assert.Equal<int[]>([1, 2], Ids(await Rows("?sort=id&descending=false")));
             Assert.Empty(Ids(await Rows("?search=closed"))); // Search OR clauses cannot escape the layout AND predicate.
             Assert.Equal<int[]>([1], Ids(await Rows("?search=Alpha")));
-            // Legacy field-array updates preserve list configuration, as do all settings readers.
-            (await client.PutAsJsonAsync(layoutPath, fields)).EnsureSuccessStatusCode();
+            // Presentation-only updates preserve list configuration, as do all settings readers.
+            var presentation = (
+                await client.GetFromJsonAsync<LayoutPresentation>(layoutPath)
+            )!;
+            (await client.PutAsJsonAsync(layoutPath, presentation)).EnsureSuccessStatusCode();
             Assert.Equal<int[]>([2, 1], Ids(await Rows()));
             Assert.Equal(
                 HttpStatusCode.BadRequest,
@@ -184,10 +182,7 @@ public partial class ApiTests
                 Assert.Equal(
                     HttpStatusCode.BadRequest,
                     (
-                        await client.PutAsJsonAsync(
-                            layoutPath,
-                            new LayoutDefinition(fields.ToList(), invalid)
-                        )
+                        await PutObjectConfiguration(client, layoutPath, fields, invalid)
                     ).StatusCode
                 );
             await Save(new ListView());

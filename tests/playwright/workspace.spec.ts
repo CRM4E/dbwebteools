@@ -405,6 +405,17 @@ test("date/time and keyed dropdown layouts preserve values and enforce unique op
   await statusDialog.getByLabel("status option 2 display").fill("Ready to publish");
   await statusDialog.getByRole("button", { name: "Save field" }).click();
   await expect(statusDialog).toHaveCount(0);
+  const dataTypes = page.getByLabel("Data types");
+  await dataTypes.getByLabel("Configure status for Default").click();
+  const statusTypeDialog = page.getByRole("dialog", {
+    name: "Data type field settings",
+  });
+  await statusTypeDialog.getByLabel("Override dropdown options").check();
+  await statusTypeDialog.getByLabel("Enable Ready to publish").check();
+  await statusTypeDialog
+    .getByRole("button", { name: "Save field settings" })
+    .click();
+  await expect(statusTypeDialog).toHaveCount(0);
   await page.getByRole("button", { name: "Data browser" }).click();
   await page
     .getByRole("combobox", { name: "Connection", exact: true })
@@ -442,6 +453,16 @@ test("date/time and keyed dropdown layouts preserve values and enforce unique op
     "2026-09-15",
   );
   await expect(edit.getByLabel("status", { exact: true })).toHaveValue("draft");
+  await expect(
+    edit.getByLabel("status", { exact: true }).getByRole("option", {
+      name: "Draft document (not available)",
+    }),
+  ).toBeDisabled();
+  await expect(
+    edit.getByLabel("status", { exact: true }).getByRole("option", {
+      name: "Ready to publish",
+    }),
+  ).toBeEnabled();
   await edit
     .getByLabel("title", { exact: true })
     .fill("Precision fixture edited");
@@ -754,7 +775,7 @@ test("list columns and read-only joins refresh when a lookup changes", async ({
   ).toBeVisible();
 });
 
-test("required layout fields block empty creates and updates", async ({
+test("data type rules block invalid creates and updates", async ({
   page,
 }) => {
   test.setTimeout(60_000);
@@ -801,18 +822,53 @@ test("required layout fields block empty creates and updates", async ({
     .selectOption("z_required_records");
   await page.getByRole("button", { name: "Edit field id" }).click();
   let fieldDialog = page.getByRole("dialog", { name: "Edit database field" });
-  await expect(fieldDialog.getByLabel("id required", { exact: true })).toBeDisabled();
+  await expect(fieldDialog.getByLabel("Required", { exact: true })).toHaveCount(0);
+  await expect(fieldDialog.getByLabel("Input mask pattern")).toHaveCount(0);
   await fieldDialog.getByRole("button", { name: "Cancel" }).click();
+  const dataTypes = page.getByLabel("Data types");
+  await dataTypes.getByRole("button", { name: "Add data type" }).click();
+  let typeDialog = page.getByRole("dialog", { name: "Add data type" });
+  await typeDialog.getByLabel("Data type key").fill("secondary");
+  await typeDialog.getByLabel("Data type label").fill("Secondary");
+  await typeDialog.getByRole("button", { name: "Save data type" }).click();
+  await expect(typeDialog).toHaveCount(0);
+
+  // Saving the first data type provisions the managed datatype column. The
+  // editor must use that new schema version without requiring a page reload.
   await page.getByRole("button", { name: "Edit field title" }).click();
   fieldDialog = page.getByRole("dialog", { name: "Edit database field" });
-  await fieldDialog.getByLabel("title required", { exact: true }).check();
+  await fieldDialog.getByLabel("Text length").fill("120");
+  const resizeResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith("/schema/tables/z_required_records/modify-column"),
+  );
   await fieldDialog.getByRole("button", { name: "Save field" }).click();
-  await page.getByRole("button", { name: "Save object" }).click();
-  await expect(
-    page.getByText("Object saved. Application behavior updated.", {
-      exact: true,
-    }),
-  ).toBeVisible();
+  expect((await resizeResponse).ok()).toBe(true);
+  await expect(fieldDialog).toHaveCount(0);
+
+  await dataTypes.getByLabel("Set Secondary as default").click();
+  await dataTypes.getByLabel("Set Default as default").click();
+  await dataTypes.getByRole("button", { name: "Default", exact: true }).click();
+  await dataTypes.getByLabel("Configure title for Default").click();
+  let typeFieldDialog = page.getByRole("dialog", {
+    name: "Data type field settings",
+  });
+  await typeFieldDialog.getByLabel("Required", { exact: true }).check();
+  await typeFieldDialog
+    .getByRole("button", { name: "Save field settings" })
+    .click();
+  await expect(typeFieldDialog).toHaveCount(0);
+  await dataTypes.getByLabel("Configure note for Default").click();
+  typeFieldDialog = page.getByRole("dialog", {
+    name: "Data type field settings",
+  });
+  await typeFieldDialog.getByLabel("Input mask pattern").fill("AA-##?");
+  await typeFieldDialog
+    .getByRole("button", { name: "Save field settings" })
+    .click();
+  await expect(typeFieldDialog).toHaveCount(0);
+  await expect(page.getByText("Data types updated.", { exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Object editor" }).click();
   await page
@@ -821,16 +877,15 @@ test("required layout fields block empty creates and updates", async ({
   await page
     .getByRole("combobox", { name: "Table", exact: true })
     .selectOption("z_required_records");
-  await page.getByRole("button", { name: "Edit field title" }).click();
-  fieldDialog = page.getByRole("dialog", { name: "Edit database field" });
-  await expect(fieldDialog.getByLabel("title required", { exact: true })).toBeChecked();
-  await fieldDialog.getByRole("button", { name: "Cancel" }).click();
-  await page.getByRole("button", { name: "Edit field note" }).click();
-  fieldDialog = page.getByRole("dialog", { name: "Edit database field" });
-  await fieldDialog.getByLabel("Control / behavior").selectOption("text");
-  await fieldDialog.getByLabel("Input mask pattern").fill("AA-##?");
-  await expect(fieldDialog.getByText(/User tip: Format: AA-##\?/)).toBeVisible();
-  await fieldDialog.getByRole("button", { name: "Save field" }).click();
+  const reloadedTypes = page.getByLabel("Data types");
+  await reloadedTypes.getByLabel("Configure title for Default").click();
+  typeFieldDialog = page.getByRole("dialog", { name: "Data type field settings" });
+  await expect(typeFieldDialog.getByLabel("Required", { exact: true })).toBeChecked();
+  await typeFieldDialog.getByRole("button", { name: "Cancel" }).click();
+  await reloadedTypes.getByLabel("Configure note for Default").click();
+  typeFieldDialog = page.getByRole("dialog", { name: "Data type field settings" });
+  await expect(typeFieldDialog.getByLabel("Input mask pattern")).toHaveValue("AA-##?");
+  await typeFieldDialog.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("button", { name: "Data browser", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Connection", exact: true })

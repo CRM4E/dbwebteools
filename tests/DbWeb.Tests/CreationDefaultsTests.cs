@@ -138,7 +138,7 @@ public partial class ApiTests
                 ),
             ];
             async Task Save() =>
-                (await admin.PutAsJsonAsync(layoutPath, fields)).EnsureSuccessStatusCode();
+                await SaveConfiguration(admin, layoutPath, fields);
             await Save();
             var preview = await admin.PostAsync(path + "/create-preview", null);
             preview.EnsureSuccessStatusCode();
@@ -323,12 +323,13 @@ public partial class ApiTests
             )
                 Assert.Equal(
                     HttpStatusCode.BadRequest,
-                    (await admin.PutAsJsonAsync(layoutPath, new[] { invalid })).StatusCode
+                    (await PutObjectConfiguration(admin, layoutPath, new[] { invalid })).StatusCode
                 );
             Assert.Equal(
                 HttpStatusCode.BadRequest,
                 (
-                    await admin.PutAsJsonAsync(
+                    await PutObjectConfiguration(
+                        admin,
                         layoutPath,
                         new[]
                         {

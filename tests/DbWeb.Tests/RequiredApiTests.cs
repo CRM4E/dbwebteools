@@ -74,10 +74,6 @@ public partial class ApiTests
                 {
                     title with
                     {
-                        Hidden = true,
-                    },
-                    title with
-                    {
                         ReadOnly = true,
                     },
                     title with
@@ -88,11 +84,29 @@ public partial class ApiTests
             )
                 Assert.Equal(
                     HttpStatusCode.BadRequest,
-                    (await client.PutAsJsonAsync(layoutPath, new[] { invalid })).StatusCode
+                    (await PutObjectConfiguration(client, layoutPath, new[] { invalid })).StatusCode
                 );
-            (
-                await client.PutAsJsonAsync(layoutPath, new[] { title, flag })
-            ).EnsureSuccessStatusCode();
+            await SaveConfiguration(client, layoutPath, new[] { title, flag });
+            var presentation = (
+                await client.GetFromJsonAsync<LayoutPresentation>(layoutPath)
+            )!;
+            var hiddenRequired = presentation with
+            {
+                Fields = presentation
+                    .Fields.Select(field =>
+                        field.Name == title.Name
+                            ? field with
+                            {
+                                ShowInEditor = false,
+                            }
+                            : field
+                    )
+                    .ToList(),
+            };
+            Assert.Equal(
+                HttpStatusCode.BadRequest,
+                (await client.PutAsJsonAsync(layoutPath, hiddenRequired)).StatusCode
+            );
             var settings = await client.GetFromJsonAsync<JsonElement>(path + "/settings");
             Assert.True(settings.GetProperty("fields")[0].GetProperty("required").GetBoolean());
             foreach (var value in new object?[] { null, "", "   ", "\t\n" })
@@ -172,25 +186,12 @@ public partial class ApiTests
             (
                 await client.PostAsJsonAsync(path + "/delete", Update(after[0], new { }))
             ).EnsureSuccessStatusCode();
-            // Old layout JSON defaults Required to false, without a migration.
-            (
-                await client.PutAsJsonAsync(
-                    layoutPath,
-                    new[]
-                    {
-                        new
-                        {
-                            name = "title",
-                            label = "Title",
-                            section = "",
-                            order = 0,
-                            hidden = false,
-                            readOnly = false,
-                            widget = "text",
-                        },
-                    }
-                )
-            ).EnsureSuccessStatusCode();
+            // Required is Data Type-owned and is cleared through the object endpoint.
+            await SaveConfiguration(
+                client,
+                layoutPath,
+                new[] { title with { Required = false } }
+            );
             (
                 await client.PostAsJsonAsync(
                     path + "/create",

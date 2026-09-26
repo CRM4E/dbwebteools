@@ -133,30 +133,28 @@ public partial class ApiTests
                     Join: new("target_id", target, "id", "email")
                 ),
             ];
-            (
-                await admin.PutAsJsonAsync(
-                    $"/api/admin/connections/{id}/tables/{table}/layout",
-                    fields
-                )
-            ).EnsureSuccessStatusCode();
-            (
-                await admin.PutAsJsonAsync(
-                    $"/api/admin/connections/{id}/tables/{child}/layout",
-                    new[]
-                    {
-                        new LayoutField(
-                            "parent_id",
-                            "Parent",
-                            "",
-                            0,
-                            false,
-                            false,
-                            "lookup",
-                            Lookup: new(table, "id", "name", [])
-                        ),
-                    }
-                )
-            ).EnsureSuccessStatusCode();
+            await SaveConfiguration(
+                admin,
+                $"/api/admin/connections/{id}/tables/{table}/layout",
+                fields
+            );
+            await SaveConfiguration(
+                admin,
+                $"/api/admin/connections/{id}/tables/{child}/layout",
+                new[]
+                {
+                    new LayoutField(
+                        "parent_id",
+                        "Parent",
+                        "",
+                        0,
+                        false,
+                        false,
+                        "lookup",
+                        Lookup: new(table, "id", "name", [])
+                    ),
+                }
+            );
             async Task Grant(string t, Dictionary<string, string>? policy, bool update = true) =>
                 (
                     await admin.PutAsJsonAsync(

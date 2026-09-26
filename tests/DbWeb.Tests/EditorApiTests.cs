@@ -62,9 +62,7 @@ public partial class ApiTests
             var day = new LayoutField("day", "Day", "", 1, false, false, "date");
             var time = new LayoutField("happened", "Happened", "", 2, false, false, "datetime");
             var stamp = new LayoutField("stamped", "Timestamp", "", 3, false, false, "date");
-            (
-                await admin.PutAsJsonAsync(layoutPath, new[] { field, day, time, stamp })
-            ).EnsureSuccessStatusCode();
+            await SaveConfiguration(admin, layoutPath, new[] { field, day, time, stamp });
             foreach (
                 var options in new List<DropdownOption>[]
                 {
@@ -78,7 +76,8 @@ public partial class ApiTests
                 Assert.Equal(
                     HttpStatusCode.BadRequest,
                     (
-                        await admin.PutAsJsonAsync(
+                        await PutObjectConfiguration(
+                            admin,
                             layoutPath,
                             new[] { field with { Options = options } }
                         )
@@ -87,13 +86,21 @@ public partial class ApiTests
             Assert.Equal(
                 HttpStatusCode.BadRequest,
                 (
-                    await admin.PutAsJsonAsync(layoutPath, new[] { field with { Name = "id" } })
+                    await PutObjectConfiguration(
+                        admin,
+                        layoutPath,
+                        new[] { field with { Name = "id" } }
+                    )
                 ).StatusCode
             );
             Assert.Equal(
                 HttpStatusCode.BadRequest,
                 (
-                    await admin.PutAsJsonAsync(layoutPath, new[] { time with { Name = "status" } })
+                    await PutObjectConfiguration(
+                        admin,
+                        layoutPath,
+                        new[] { time with { Name = "status" } }
+                    )
                 ).StatusCode
             );
             Assert.Equal(

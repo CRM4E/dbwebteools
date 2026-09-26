@@ -205,7 +205,7 @@ public partial class ApiTests
                 "text",
                 Mask: new(Pattern: "###-###")
             );
-            (await client.PutAsJsonAsync(layoutPath, new[] { field })).EnsureSuccessStatusCode();
+            await SaveConfiguration(client, layoutPath, new[] { field });
 
             var settings = await client.GetFromJsonAsync<JsonElement>(
                 $"/api/connections/{connectionId}/tables/{table}/settings"
@@ -290,7 +290,7 @@ public partial class ApiTests
             };
             Assert.Equal(
                 HttpStatusCode.BadRequest,
-                (await client.PutAsJsonAsync(layoutPath, new[] { invalidLength })).StatusCode
+                (await PutObjectConfiguration(client, layoutPath, new[] { invalidLength })).StatusCode
             );
             var invalidControl = field with
             {
@@ -298,7 +298,7 @@ public partial class ApiTests
             };
             Assert.Equal(
                 HttpStatusCode.BadRequest,
-                (await client.PutAsJsonAsync(layoutPath, new[] { invalidControl })).StatusCode
+                (await PutObjectConfiguration(client, layoutPath, new[] { invalidControl })).StatusCode
             );
             var invalidDefault = field with
             {
@@ -306,7 +306,7 @@ public partial class ApiTests
             };
             Assert.Equal(
                 HttpStatusCode.BadRequest,
-                (await client.PutAsJsonAsync(layoutPath, new[] { invalidDefault })).StatusCode
+                (await PutObjectConfiguration(client, layoutPath, new[] { invalidDefault })).StatusCode
             );
         }
         finally

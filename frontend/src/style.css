@@ -1400,3 +1400,36 @@ input[aria-readonly="true"] {
 .object-definition table td {
   vertical-align: top;
 }
+
+.data-types {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #d8e1da;
+}
+.data-type-layout { display: grid; gap: 1.25rem; }
+.data-type-fields {
+  padding: 1rem;
+  border: 1px solid #d8e1da;
+  border-radius: 0.75rem;
+  background: var(--panel, #fff);
+}
+.data-type-fields h3 { margin-top: 0; }
+.selected-row {
+  background: color-mix(in srgb, var(--accent, #2563eb) 8%, transparent);
+}
+.link-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent, #2563eb);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+.option-checklist {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  max-height: 18rem;
+  overflow: auto;
+}

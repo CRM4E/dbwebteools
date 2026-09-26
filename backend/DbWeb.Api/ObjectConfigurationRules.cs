@@ -4,7 +4,7 @@ namespace DbWeb.Api;
 
 public static class ObjectConfigurationRules
 {
-    public static void ValidatePresentation(
+    static void ValidatePresentationCompleteness(
         ObjectDefinition definition,
         LayoutPresentation presentation
     )
@@ -23,16 +23,28 @@ public static class ObjectConfigurationRules
             || presentation.Fields.Any(f => !names.Contains(f.Name))
         )
             throw new ApiError(400, "Layout must configure every object field exactly once.");
+    }
+
+    public static void ValidatePresentation(
+        ObjectDefinition definition,
+        LayoutPresentation presentation
+    )
+    {
+        ValidatePresentationCompleteness(definition, presentation);
         if (presentation.Fields.Any(f => f.Section == null || f.Section.Length > 150))
             throw new ApiError(400, "Editor section names must be at most 150 characters.");
         if (presentation.Fields.Any(f => f.Label == null || f.Label.Length > 150))
             throw new ApiError(400, "Field labels must be at most 150 characters.");
-        var required = definition.Fields.Where(f => f.Required).Select(f => f.Name).ToHashSet();
+        var required = ObjectModel
+            .Merge(definition, presentation)
+            .Fields.Where(f => f.Required)
+            .Select(f => f.Name)
+            .ToHashSet();
         if (presentation.Fields.Any(f => !f.ShowInEditor && required.Contains(f.Name)))
             throw new ApiError(400, "Required fields must remain visible in the editor.");
     }
 
-    public static async Task<LayoutDefinition> Validate(
+    public static async Task<StoredObjectDefinition> Validate(
         DatabaseService service,
         MySqlConnection connection,
         string table,
@@ -40,6 +52,38 @@ public static class ObjectConfigurationRules
         LayoutPresentation presentation
     )
     {
+        if (definition.Fields == null || definition.Fields.Any(field => field == null))
+            throw new ApiError(400, "Object fields are required.");
+        // Normalize completes omitted presentation rows for stored legacy data. API writes
+        // must not gain that repair behavior: a submitted layout is complete or rejected.
+        ValidatePresentationCompleteness(definition, presentation);
+        if (definition.DataTypes != null)
+        {
+            var submittedNames = definition.Fields
+                .Select(field => field.Name)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (
+                definition.DataTypes.Count is < 1 or > 100
+                || definition.DataTypes.Where(type => type != null).Select(type => type.Key)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Count() != definition.DataTypes.Count
+                || definition.DataTypes.Where(type => type != null).Select(type => type.Label)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Count() != definition.DataTypes.Count
+                || definition.DataTypes.Any(type =>
+                    type == null
+                    || type.Fields == null
+                    || type.Fields.Any(field => field == null || !submittedNames.Contains(field.Name))
+                    || type.Fields.Select(field => field.Name)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .Count() != type.Fields.Count
+                )
+            )
+                throw new ApiError(400, "Data type fields must reference object fields at most once.");
+        }
+        var normalized = ObjectModel.Normalize(new(definition, presentation));
+        definition = normalized.Object;
+        presentation = normalized.Layout;
         if (definition.Fields == null || definition.Fields.Any(f => f == null))
             throw new ApiError(400, "Object fields are required.");
         if (definition.Fields.Any(f => f.Label == null || f.Label.Length > 150))
@@ -50,6 +94,79 @@ public static class ObjectConfigurationRules
             || definition.Fields.Count(x => x.Widget is "join" or "formula") > 20
         )
             throw new ApiError(400, "Invalid object fields.");
+        if (
+            definition.Fields.Any(field =>
+                field.Name.Equals("datatype", StringComparison.OrdinalIgnoreCase)
+            )
+        )
+            throw new ApiError(400, "datatype is a backend-managed field.");
+
+        var dataTypes = definition.DataTypes!;
+        if (
+            dataTypes.Count is < 1 or > 100
+            || dataTypes.Any(type =>
+                type == null
+                || string.IsNullOrWhiteSpace(type.Key)
+                || type.Key.Length > 64
+                || type.Key != type.Key.Trim()
+                || string.IsNullOrWhiteSpace(type.Label)
+                || type.Label.Length > 150
+                || type.Label != type.Label.Trim()
+                || type.Fields == null
+            )
+            || dataTypes.Select(type => type.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count()
+                != dataTypes.Count
+            || dataTypes.Select(type => type.Label).Distinct(StringComparer.OrdinalIgnoreCase).Count()
+                != dataTypes.Count
+            || dataTypes.Count(type =>
+                type.Key.Equals(definition.DefaultDataTypeKey, StringComparison.OrdinalIgnoreCase)
+            ) != 1
+        )
+            throw new ApiError(
+                400,
+                "Define 1–100 data types with unique non-blank keys (up to 64 characters), unique labels, and exactly one default."
+            );
+        var objectFields = definition.Fields.ToDictionary(
+            field => field.Name,
+            StringComparer.OrdinalIgnoreCase
+        );
+        foreach (var type in dataTypes)
+        {
+            if (
+                type.Fields.Count != definition.Fields.Count
+                || type.Fields.Select(field => field.Name)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Count() != type.Fields.Count
+                || type.Fields.Any(field => !objectFields.ContainsKey(field.Name))
+            )
+                throw new ApiError(400, "Every data type must configure every object field exactly once.");
+            foreach (var setting in type.Fields)
+            {
+                var field = objectFields[setting.Name];
+                var enabled = setting.EnabledOptionKeys ?? [];
+                if (
+                    (field.ReadOnly || field.Widget is "join" or "formula" or "sumup")
+                        && (setting.Required || setting.Mask != null)
+                    ||
+                    enabled.Count != enabled.Distinct(StringComparer.OrdinalIgnoreCase).Count()
+                    || field.Widget != "dropdown"
+                        && (setting.OverrideDropdownOptions || enabled.Count > 0)
+                    || setting.OverrideDropdownOptions
+                        && enabled.Any(key =>
+                            field.Options?.Any(option =>
+                                option.Key.Equals(key, StringComparison.Ordinal)
+                            ) != true
+                        )
+                    || setting.Required
+                        && setting.OverrideDropdownOptions
+                        && enabled.Count == 0
+                )
+                    throw new ApiError(
+                        400,
+                        "Data type settings must be editable-field rules, and dropdown selections must use unique keys from the field's master option catalog."
+                    );
+            }
+        }
 
         ValidatePresentation(definition, presentation);
         var fields = ObjectModel.Merge(definition, presentation).Fields;
@@ -125,7 +242,14 @@ public static class ObjectConfigurationRules
                 throw new ApiError(400, "Only formula fields may define a formula.");
             if (field.Join != null)
                 throw new ApiError(400, "Only joined fields may define a join.");
-            LayoutRules.Validate(field, columns.Single(x => x.Name == field.Name));
+            var master = objectFields[field.Name];
+            LayoutRules.Validate(
+                field with
+                {
+                    Options = master.Options
+                },
+                columns.Single(x => x.Name == field.Name)
+            );
             if (field.Widget == "lookup")
                 await service.ValidateLookup(
                     connection,
@@ -137,6 +261,26 @@ public static class ObjectConfigurationRules
         }
         await service.ValidateCopyMappings(connection, fields, columns);
         await service.ValidateCreationDefaults(connection, fields, columns);
-        return new(fields, definition.View, definition.SumupsPending);
+        // Validate non-default settings now even though runtime currently applies the default only.
+        foreach (var type in dataTypes)
+        {
+            var typed = definition with
+            {
+                DefaultDataTypeKey = type.Key
+            };
+            foreach (
+                var field in ObjectModel.Merge(typed, presentation).Fields.Where(field =>
+                    field.Widget is not "join" and not "formula"
+                )
+            )
+                LayoutRules.Validate(
+                    field with
+                    {
+                        Options = objectFields[field.Name].Options
+                    },
+                    columns.Single(column => column.Name == field.Name)
+                );
+        }
+        return new(definition, presentation);
     }
 }

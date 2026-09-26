@@ -8,9 +8,18 @@ namespace DbWeb.Api;
 
 public class FieldPolicy
 {
-    public int Id { get; set; }
-    public int UserId { get; set; }
-    public int ConnectionId { get; set; }
+    public int Id
+    {
+        get; set;
+    }
+    public int UserId
+    {
+        get; set;
+    }
+    public int ConnectionId
+    {
+        get; set;
+    }
     public string Table { get; set; } = "";
     public string FieldsJson { get; set; } = "{}";
 }
@@ -20,9 +29,11 @@ public sealed class FieldAccess(Dictionary<string, string>? levels)
     public bool Explicit => levels != null;
 
     public bool Read(string name) =>
-        levels == null || levels.GetValueOrDefault(name) is "read" or "write";
+        !DataTypeColumn.Is(name)
+        && (levels == null || levels.GetValueOrDefault(name) is "read" or "write");
 
-    public bool Write(string name) => levels == null || levels.GetValueOrDefault(name) == "write";
+    public bool Write(string name) =>
+        !DataTypeColumn.Is(name) && (levels == null || levels.GetValueOrDefault(name) == "write");
 
     public void RequireRead(IEnumerable<string> names)
     {
@@ -143,7 +154,10 @@ public sealed class FieldAccess(Dictionary<string, string>? levels)
         if (copy)
             names = names.Concat(lookup.CopyMappings?.Select(m => m.SourceColumn) ?? []);
         var access = await Related(db, ctx, connection, lookup.Table, names);
-        return lookup with { SearchColumns = lookup.SearchColumns.Where(access.Read).ToList() };
+        return lookup with
+        {
+            SearchColumns = lookup.SearchColumns.Where(access.Read).ToList()
+        };
     }
 
     // Calculated fields cannot be used as a side channel for unreadable source values.
@@ -211,7 +225,10 @@ public sealed class FieldAccess(Dictionary<string, string>? levels)
                 {
                     try
                     {
-                        safe = safe with { Lookup = await Lookup(db, ctx, connection, lookup) };
+                        safe = safe with
+                        {
+                            Lookup = await Lookup(db, ctx, connection, lookup)
+                        };
                         if (lookup.CopyMappings is { Count: > 0 })
                         {
                             try
@@ -227,7 +244,10 @@ public sealed class FieldAccess(Dictionary<string, string>? levels)
                                 {
                                     ReadOnly = true,
                                     Required = false,
-                                    Lookup = safe.Lookup! with { CopyMappings = [] },
+                                    Lookup = safe.Lookup! with
+                                    {
+                                        CopyMappings = []
+                                    },
                                 };
                             }
                         }

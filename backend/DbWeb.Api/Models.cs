@@ -1,20 +1,30 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
 
 namespace DbWeb.Api;
 
 public class AppUser
 {
-    public int Id { get; set; }
+    public int Id
+    {
+        get; set;
+    }
     public string Username { get; set; } = "";
     public string PasswordHash { get; set; } = "";
-    public bool IsAdmin { get; set; }
+    public bool IsAdmin
+    {
+        get; set;
+    }
     public bool Enabled { get; set; } = true;
     public string Stamp { get; set; } = Guid.NewGuid().ToString();
 }
 
 public class DatabaseConnection
 {
-    public int Id { get; set; }
+    public int Id
+    {
+        get; set;
+    }
     public string Name { get; set; } = "";
     public string Host { get; set; } = "";
     public uint Port { get; set; } = 3306;
@@ -27,21 +37,51 @@ public class DatabaseConnection
 public class TableGrant
 {
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
-    public Dictionary<string, string>? Fields { get; set; }
-    public int Id { get; set; }
-    public int UserId { get; set; }
-    public int ConnectionId { get; set; }
+    public Dictionary<string, string>? Fields
+    {
+        get; set;
+    }
+    public int Id
+    {
+        get; set;
+    }
+    public int UserId
+    {
+        get; set;
+    }
+    public int ConnectionId
+    {
+        get; set;
+    }
     public string Table { get; set; } = "";
-    public bool Read { get; set; }
-    public bool Create { get; set; }
-    public bool Update { get; set; }
-    public bool Delete { get; set; }
+    public bool Read
+    {
+        get; set;
+    }
+    public bool Create
+    {
+        get; set;
+    }
+    public bool Update
+    {
+        get; set;
+    }
+    public bool Delete
+    {
+        get; set;
+    }
 }
 
 public class RecordLayout
 {
-    public int Id { get; set; }
-    public int ConnectionId { get; set; }
+    public int Id
+    {
+        get; set;
+    }
+    public int ConnectionId
+    {
+        get; set;
+    }
     public string Table { get; set; } = "";
     public string FieldsJson { get; set; } = "[]";
 }
@@ -64,11 +104,20 @@ public record LayoutField(
     SumupConfig? Sumup = null,
     CreationDefault? CreationDefault = null,
     InputMask? Mask = null
-);
+)
+{
+    public List<string>? EnabledOptionKeys
+    {
+        get; init;
+    }
+}
 
 public class AuditEntry
 {
-    public long Id { get; set; }
+    public long Id
+    {
+        get; set;
+    }
     public DateTime At { get; set; } = DateTime.UtcNow;
     public string Actor { get; set; } = "";
     public string Action { get; set; } = "";
@@ -160,7 +209,10 @@ public record LookupCopyInput(System.Text.Json.JsonElement Key);
 
 public record RecordRow(Dictionary<string, object?> Values, string Version)
 {
-    public string? KeyToken { get; init; }
+    public string? KeyToken
+    {
+        get; init;
+    }
     public Dictionary<string, string?> DisplayValues { get; } = new();
     public Dictionary<string, object?> JoinedValues { get; } = new();
     public Dictionary<string, string> CalculationErrors { get; } = new();
@@ -174,10 +226,19 @@ public record RecordPage(
     List<RecordRow> Rows
 )
 {
-    public bool HasPrimaryKey { get; set; }
+    public bool HasPrimaryKey
+    {
+        get; set;
+    }
     public List<ColumnInfo> JoinedColumns { get; } = new();
-    public string? Sort { get; init; }
-    public bool Descending { get; init; }
+    public string? Sort
+    {
+        get; init;
+    }
+    public bool Descending
+    {
+        get; init;
+    }
 }
 
 public record DropdownOption(string Key, string Display);

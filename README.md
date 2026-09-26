@@ -118,7 +118,7 @@ In **Administration → Object editor**, click **Edit** for a field and use thes
 
 Dropdowns display labels in both the editor and record grid, while only keys are stored in MariaDB. Unknown submitted keys and duplicate configuration entries are rejected by the API. Existing values removed from the option list remain visible as unconfigured values and are not silently rewritten; choose a configured replacement to change them. Nullable fields can be cleared, and untouched fields on new records retain database defaults. Updating a record submits only changed fields, preserving unrelated timestamps and allowing database `ON UPDATE` behavior to operate normally.
 
-These controls are stored in the object layer in `/var/lib/dbwebtools/app.db`; changing them does not alter MariaDB schema. Existing combined definitions are migrated to the layered object/layout format automatically.
+These controls are stored in the object layer in `/var/lib/dbwebtools/app.db`. Existing combined definitions are migrated to the layered object/layout format automatically. Data Types additionally manage the reserved MariaDB `datatype VARCHAR(64) NOT NULL` column described below.
 
 ## Build and test
 
@@ -241,15 +241,23 @@ Every pull request runs release builds, backend authorization/CSRF tests, fronte
 
 Use feature branches and pull requests for subsequent changes; never commit credentials or application data. Configure branch protection to require the `validate` job before merging.
 
+### Data Types
+
+Every object has a **Data Types** list and exactly one default type. Existing objects are normalized to a `default` type without changing their effective required or mask behavior. Type keys are immutable stored identifiers; labels can be edited. New records receive the current default key in the backend-managed `datatype VARCHAR(64) NOT NULL` column. Existing rows keep the key assigned when they were created, and clients cannot submit or update the managed column directly.
+
+Select a data type to drill into all object fields. Required and input-mask rules belong to those per-type field settings rather than the object field itself. Dropdown key/display pairs remain the object-level master catalog. By default every catalog value is available; enable **Override dropdown options** to choose the values available for that type. Existing records whose stored value is no longer enabled still display its master label and can be changed only to an enabled value.
+
+The record UI currently applies the default type's settings to all records. Additional types can be authored now for later record-specific selection. The application provisions and backfills the managed column when an administrator saves an existing object. Deployments can run `DbWeb.Api --provision-data-types` while the service is stopped to migrate every configured table explicitly; ordinary read requests never run DDL. Object-editor connections therefore require ALTER and UPDATE permission during this one-time upgrade. A pre-existing incompatible `datatype` column or unconfigured stored type key is rejected rather than overwritten.
+
 ### Required fields
 
-In **Administration → Object editor**, click **Edit**, check **Required** for fields that must be filled, and save the field. Required fields are marked in the record editor. NULL, missing values, empty strings, and whitespace-only strings are rejected; zero and false are valid. The API enforces the rule as well as the form. On updates, it checks submitted values together with the locked current record, so an unchanged empty required field must be repaired before other edits can be saved. Deletes are unaffected.
+In **Administration → Object editor → Data Types**, select a data type, configure a field, check **Required**, and save the field settings. Required fields are marked in the record editor. NULL, missing values, empty strings, and whitespace-only strings are rejected; zero and false are valid. The API enforces the rule as well as the form. On updates, it checks submitted values together with the locked current record, so an unchanged empty required field must be repaired before other edits can be saved. Deletes are unaffected.
 
-Required fields must be editable stored columns; generated, auto-increment, read-only, and joined fields cannot be marked required. Layout editor prevents hiding a required field from the editor. On creation, a required value must be supplied explicitly, even if the database defines a default. Existing objects default to not required; database NOT NULL constraints still apply. Required behavior is stored in the object layer without changing MariaDB schema.
+Required fields must be editable stored columns; generated, auto-increment, read-only, joined, formula, and sum-up fields cannot be marked required. Layout editor prevents hiding a field required by the active default data type. On creation, a required value must be supplied explicitly, even if the database defines a default. Database NOT NULL constraints still apply; data-type required rules do not modify column nullability.
 
 ### Text input masks
 
-For a Text or Text area field, open **Object editor → Edit → Input mask** to enter an exact pattern or enable **Numbers only**. In a pattern, `#` accepts a number, `A` a letter, and `X` a letter or number; append `?` to make a position optional. Empty values remain governed by the field's Required/nullability settings.
+For a Text or Text area field, open **Object editor → Data Types**, select the data type, configure the field, and enter an exact **Pattern** or enable **Numbers only**. In a pattern, `#` accepts a number, `A` a letter, and `X` a letter or number; append `?` to make a position optional. Empty values remain governed by the field's Required/nullability settings.
 
 The record editor shows the complete rule below the field and checks changed values before saving. The backend independently enforces the same rule for creates, updates, related-record writes, lookup-copied values, and configured creation defaults. Masks are structured rather than arbitrary regular expressions.
 
@@ -266,7 +274,7 @@ Filters are enforced on the records API before counting and pagination; free-tex
 
 Conditions include equals/not-equals, greater/less than (inclusive or exclusive), text contains/starts-with, and IS NULL/IS NOT NULL. Text matching follows MariaDB column collation; contains/starts-with values treat `%` and `_` literally. Empty text and NULL are distinct. Not-equals excludes NULL rows; use an OR with IS NULL to include them. Relation filters use stored keys; configured text dropdowns offer display labels while storing the option key. Dates use database-session values without timezone conversion. Numeric filters preserve integer/decimal precision (up to 65 digits and 30 decimal places).
 
-Object definitions and presentation layouts remain in `RecordLayout.FieldsJson` in the application SQLite database, but use a layered `{ "Object": ..., "Layout": ... }` format. Startup migrates existing array/combined definitions in place. Runtime endpoints merge both layers for compatibility. The object endpoint owns semantic fields and list query behavior; the layout endpoint owns `label`, `section`, `editorOrder`, `showInEditor`, `listOrder`, and `showInList`. Legacy combined layout PUT requests remain accepted and are normalized into both layers.
+Object definitions and presentation layouts remain in `RecordLayout.FieldsJson` in the application SQLite database, but use a layered `{ "Object": ..., "Layout": ... }` format. Startup migrates existing array/combined definitions in place. Runtime endpoints merge both layers for compatibility. The object endpoint owns semantic fields and list query behavior; the layout endpoint owns `label`, `section`, `editorOrder`, `showInEditor`, `listOrder`, and `showInList`. Legacy combined layout PUT requests remain accepted when they omit Data Type-owned `Required` and `Mask` properties; clients must save those settings through the object endpoint.
 
 ## Object and layout editors
 

@@ -76,9 +76,27 @@ export function CreationDefaultEditor({
             onChange={(e) => change({ value: e.target.value })}
           >
             <option value="">Choose value…</option>
-            {field.options?.map((o) => (
-              <option key={o.key} value={o.key}>
+            {field.options
+              ?.filter((option) =>
+                field.enabledOptionKeys == null
+                  ? true
+                  : field.enabledOptionKeys.includes(option.key) ||
+                    option.key === setting.value,
+              )
+              .map((o) => (
+              <option
+                key={o.key}
+                value={o.key}
+                disabled={
+                  field.enabledOptionKeys != null &&
+                  !field.enabledOptionKeys.includes(o.key)
+                }
+              >
                 {o.display} ({o.key})
+                {field.enabledOptionKeys != null &&
+                !field.enabledOptionKeys.includes(o.key)
+                  ? " — not available"
+                  : ""}
               </option>
             ))}
           </select>

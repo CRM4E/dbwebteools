@@ -61,11 +61,12 @@ public partial class ApiTests
                 "email"
             );
             var layoutPath = $"/api/admin/connections/{id}/tables/{table}/layout";
-            (await client.PutAsJsonAsync(layoutPath, new[] { emailField })).EnsureSuccessStatusCode();
+            await SaveConfiguration(client, layoutPath, new[] { emailField });
             Assert.Equal(
                 HttpStatusCode.BadRequest,
                 (
-                    await client.PutAsJsonAsync(
+                    await PutObjectConfiguration(
+                        client,
                         $"/api/admin/connections/{id}/tables/{textTable}/layout",
                         new[] { emailField }
                     )
@@ -74,7 +75,8 @@ public partial class ApiTests
             Assert.Equal(
                 HttpStatusCode.BadRequest,
                 (
-                    await client.PutAsJsonAsync(
+                    await PutObjectConfiguration(
+                        client,
                         $"/api/admin/connections/{id}/tables/{shortTable}/layout",
                         new[] { emailField }
                     )

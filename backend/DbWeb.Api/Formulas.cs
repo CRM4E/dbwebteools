@@ -89,9 +89,10 @@ public static class Formulas
                 var key = a.Evaluate(1);
                 if (key == null)
                     return null;
-                return fields!
-                    .Single(f => f.Name == fieldName && f.Widget == "dropdown")
-                    .Options?.FirstOrDefault(o => o.Key == Text(key))
+                var field = fields!
+                    .Single(f => f.Name == fieldName && f.Widget == "dropdown");
+                return field.Options
+                    ?.FirstOrDefault(o => o.Key == Text(key))
                     ?.Display;
             };
             foreach (var name in new[] { "Round", "Abs", "Floor", "Ceiling", "Min", "Max" })

@@ -95,9 +95,7 @@ public partial class ApiTests
                 Filters: [new("active", "eq", "1")]
             );
             async Task Save(List<LayoutField> nextFields) =>
-                (
-                    await client.PutAsJsonAsync(layoutPath, new LayoutDefinition(nextFields, view))
-                ).EnsureSuccessStatusCode();
+                await SaveConfiguration(client, layoutPath, nextFields, view);
             async Task<JsonElement> Rows(string search, string query = "") =>
                 await client.GetFromJsonAsync<JsonElement>(
                     path + "?search=" + Uri.EscapeDataString(search) + query
@@ -159,7 +157,7 @@ public partial class ApiTests
             // Removing a referenced dropdown must be rejected, not break existing lists.
             Assert.Equal(
                 HttpStatusCode.BadRequest,
-                (await client.PutAsJsonAsync(layoutPath, new[] { fields[2] })).StatusCode
+                (await PutObjectConfiguration(client, layoutPath, new[] { fields[2] }, view)).StatusCode
             );
             Assert.Equal<int[]>([1], Ids(await Rows("awaiting"))); // Excludes inactive and differently cased legacy keys.
             Assert.Equal<int[]>([2], Ids(await Rows("Manager's"))); // TINYTEXT dropdown, apostrophe, and filter.
