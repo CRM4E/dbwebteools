@@ -97,6 +97,7 @@ describe("data type metadata", () => {
         save={save}
       />,
     );
+    fireEvent.click(screen.getByRole("button", { name: "Default" }));
     fireEvent.click(screen.getByRole("button", { name: "Configure title for Default" }));
     expect(screen.getByText(/Existing legacy rule: Use at least 4 characters/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Remove input mask" }));
@@ -128,6 +129,7 @@ describe("data type metadata", () => {
   it("allows an explicit empty dropdown override and then selected master values", async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     render(<DataTypesEditor dataTypes={[base]} defaultDataTypeKey="default" fields={fields} save={save} />);
+    fireEvent.click(screen.getByRole("button", { name: "Default" }));
     fireEvent.click(screen.getByRole("button", { name: "Configure status for Default" }));
     fireEvent.click(screen.getByLabelText("Override dropdown options"));
     expect((screen.getByLabelText("Enable Ready") as HTMLInputElement).checked).toBe(false);
@@ -140,6 +142,7 @@ describe("data type metadata", () => {
     cleanup();
     save.mockClear();
     render(<DataTypesEditor dataTypes={[base]} defaultDataTypeKey="default" fields={fields} save={save} />);
+    fireEvent.click(screen.getByRole("button", { name: "Default" }));
     fireEvent.click(screen.getByRole("button", { name: "Configure status for Default" }));
     fireEvent.click(screen.getByLabelText("Override dropdown options"));
     fireEvent.click(screen.getByLabelText("Enable Ready"));
@@ -153,6 +156,20 @@ describe("data type metadata", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit data type Default" }));
     expect((screen.getByLabelText("Data type key") as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByLabelText("Data type label") as HTMLInputElement).disabled).toBe(false);
+  });
+
+  it("shows a data type's fields only after drilling down through its label", () => {
+    render(<DataTypesEditor dataTypes={[base]} defaultDataTypeKey="default" fields={fields} save={vi.fn()} />);
+    expect(screen.queryByRole("heading", { name: "Default fields" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Configure title for Default" })).toBeNull();
+
+    const label = screen.getByRole("button", { name: "Default" });
+    expect(label.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(label);
+
+    expect(screen.getByRole("heading", { name: "Default fields" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Configure title for Default" })).toBeTruthy();
+    expect(label.getAttribute("aria-expanded")).toBe("true");
   });
 
   it("persists exactly one default and protects it from deletion", async () => {

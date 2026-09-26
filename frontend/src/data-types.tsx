@@ -114,7 +114,7 @@ export function DataTypesEditor({
   disabled?: boolean;
   save: (dataTypes: DataTypeDefinition[], defaultDataTypeKey: string) => Promise<void>;
 }) {
-  const [selectedKey, setSelectedKey] = useState(defaultDataTypeKey);
+  const [selectedKey, setSelectedKey] = useState("");
   const [typeDraft, setTypeDraft] = useState<TypeDraft | null>(null);
   const [fieldDraft, setFieldDraft] = useState<FieldDraft | null>(null);
   const [error, setError] = useState("");
@@ -122,9 +122,9 @@ export function DataTypesEditor({
   const typeDialogRef = useRef<HTMLFormElement>(null);
   const fieldDialogRef = useRef<HTMLFormElement>(null);
   useEffect(() => {
-    if (!dataTypes.some((dataType) => dataType.key === selectedKey))
-      setSelectedKey(defaultDataTypeKey || dataTypes[0]?.key || "");
-  }, [dataTypes, defaultDataTypeKey, selectedKey]);
+    if (selectedKey && !dataTypes.some((dataType) => dataType.key === selectedKey))
+      setSelectedKey("");
+  }, [dataTypes, selectedKey]);
   useEffect(() => {
     if (!typeDraft) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -139,7 +139,7 @@ export function DataTypesEditor({
       ?.focus();
     return () => previous?.focus();
   }, [Boolean(fieldDraft)]);
-  const selected = dataTypes.find((dataType) => dataType.key === selectedKey) || dataTypes[0];
+  const selected = dataTypes.find((dataType) => dataType.key === selectedKey);
   const duplicateTypeKey = !!typeDraft && !typeDraft.originalKey && dataTypes.some(
     (item) => item.key.toLowerCase() === typeDraft.key.trim().toLowerCase(),
   );
@@ -192,7 +192,7 @@ export function DataTypesEditor({
             <tbody>
               {dataTypes.map((dataType) => (
                 <tr key={dataType.key} className={dataType.key === selected?.key ? "selected-row" : undefined}>
-                  <td><button type="button" className="link-button" onClick={() => setSelectedKey(dataType.key)}>{dataType.label}</button></td>
+                  <td><button type="button" className="link-button" aria-expanded={dataType.key === selected?.key} onClick={() => setSelectedKey(dataType.key)}>{dataType.label}</button></td>
                   <td><code>{dataType.key}</code></td>
                   <td>{dataType.key === defaultDataTypeKey ? <span className="badge">Default</span> : <button type="button" aria-label={`Set ${dataType.label} as default`} disabled={disabled || saving} onClick={() => void persist(dataTypes, dataType.key)}>Set as default</button>}</td>
                   <td><div className="actions">
@@ -200,7 +200,7 @@ export function DataTypesEditor({
                     <button type="button" className="danger" aria-label={`Delete data type ${dataType.label}`} disabled={disabled || saving || dataTypes.length === 1 || dataType.key === defaultDataTypeKey} onClick={() => {
                       if (!window.confirm(`Delete data type ${dataType.label}?`)) return;
                       const next = dataTypes.filter((item) => item.key !== dataType.key);
-                      setSelectedKey(defaultDataTypeKey);
+                      setSelectedKey((current) => current === dataType.key ? "" : current);
                       void persist(next, defaultDataTypeKey);
                     }}>Delete</button>
                   </div></td>

@@ -34,6 +34,16 @@ function mockApi(objectDefinition: unknown = definition) {
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("Object field workflow", () => {
+  it("places object action buttons above the Data Types section", async () => {
+    mockApi();
+    render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
+    await screen.findByText("varchar(100)");
+
+    const addField = screen.getByRole("button", { name: "Add field" });
+    const dataTypes = screen.getByRole("heading", { name: "Data Types" });
+    expect(addField.compareDocumentPosition(dataTypes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("keeps the list read-only and saves behavior from an accessible edit dialog", async () => {
     mockApi();
     render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
@@ -119,6 +129,7 @@ describe("Object field workflow", () => {
     expect(screen.queryByLabelText("Regex-style mask pattern")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
+    fireEvent.click(screen.getByRole("button", { name: "Default" }));
     fireEvent.click(screen.getByRole("button", { name: "Configure title for Default" }));
     expect((screen.getByLabelText("Required") as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText("Regex-style mask pattern") as HTMLInputElement).value).toBe("AA-##?");
@@ -193,6 +204,7 @@ describe("Object field workflow", () => {
     render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
     await screen.findByText("varchar(100)");
 
+    fireEvent.click(screen.getByRole("button", { name: "Default" }));
     fireEvent.click(screen.getByRole("button", { name: "Configure title for Default" }));
     fireEvent.click(screen.getByLabelText("Required"));
     fireEvent.click(screen.getByRole("button", { name: "Save field settings" }));

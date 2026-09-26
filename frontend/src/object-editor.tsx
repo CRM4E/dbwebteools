@@ -1073,14 +1073,6 @@ export function ObjectEditor({
                   </tbody>
                 </table>
               </div>
-              <DataTypesEditor
-                dataTypes={dataTypes}
-                defaultDataTypeKey={defaultDataTypeKey}
-                fields={objectFields}
-                maskEligibleFieldNames={maskEligibleFields(objectFields, schema)}
-                disabled={busy || objectLoading}
-                save={saveDataTypes}
-              />
               <div className="object-editor-footer">
                 <div className="actions object-field-actions">
                   <button
@@ -1226,6 +1218,14 @@ export function ObjectEditor({
                   </button>
                 </div>
               </div>
+              <DataTypesEditor
+                dataTypes={dataTypes}
+                defaultDataTypeKey={defaultDataTypeKey}
+                fields={objectFields}
+                maskEligibleFieldNames={maskEligibleFields(objectFields, schema)}
+                disabled={busy || objectLoading}
+                save={saveDataTypes}
+              />
             </>
           )}
         </section>
