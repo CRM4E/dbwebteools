@@ -64,6 +64,28 @@ const canonicalObjectFields = (fields: ObjectField[]) => fields.map((field) => {
   delete canonical.mask;
   return canonical;
 });
+const textColumnTypes = new Set([
+  "char",
+  "varchar",
+  "tinytext",
+  "text",
+  "mediumtext",
+  "longtext",
+]);
+const maskEligibleFields = (fields: ObjectField[], schema: Schema | null) =>
+  new Set(
+    fields
+      .filter((field) => {
+        const column = schema?.columns.find((candidate) => candidate.name === field.name);
+        return !!column
+          && textColumnTypes.has(column.type)
+          && !column.generated
+          && !column.autoIncrement
+          && !field.readOnly
+          && ["auto", "text", "textarea"].includes(field.widget);
+      })
+      .map((field) => field.name),
+  );
 const kind = (c: SchemaColumn) =>
   ({
     varchar: "text",
@@ -154,6 +176,7 @@ export function ObjectEditor({
               object.fields,
               object.dataTypes,
               object.defaultDataTypeKey,
+              maskEligibleFields(object.fields, nextSchema),
             );
             setSchema(nextSchema);
             setObjectFields(canonicalObjectFields(object.fields));
@@ -510,7 +533,11 @@ export function ObjectEditor({
               const nextFields = canonicalObjectFields(editing
                 ? objectFields.map((field) => field.name === savedField.name ? savedField : field)
                 : [...objectFields, savedField]);
-              const nextDataTypes = reconcileDataTypes(dataTypes, nextFields);
+              const nextDataTypes = reconcileDataTypes(
+                dataTypes,
+                nextFields,
+                maskEligibleFields(nextFields, result),
+              );
               await api(
                 `/admin/connections/${connection}/tables/${encodeURIComponent(table)}/object`,
                 "PUT",
@@ -1050,6 +1077,7 @@ export function ObjectEditor({
                 dataTypes={dataTypes}
                 defaultDataTypeKey={defaultDataTypeKey}
                 fields={objectFields}
+                maskEligibleFieldNames={maskEligibleFields(objectFields, schema)}
                 disabled={busy || objectLoading}
                 save={saveDataTypes}
               />
@@ -1176,7 +1204,11 @@ export function ObjectEditor({
                           "PUT",
                           {
                             fields: canonicalObjectFields(objectFields),
-                            dataTypes: reconcileDataTypes(dataTypes, objectFields),
+                            dataTypes: reconcileDataTypes(
+                              dataTypes,
+                              objectFields,
+                              maskEligibleFields(objectFields, schema),
+                            ),
                             defaultDataTypeKey,
                             view: {
                               ...objectView,

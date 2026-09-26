@@ -828,7 +828,7 @@ test("data type rules block invalid creates and updates", async ({
   await page.getByRole("button", { name: "Edit field id" }).click();
   let fieldDialog = page.getByRole("dialog", { name: "Edit database field" });
   await expect(fieldDialog.getByLabel("Required", { exact: true })).toHaveCount(0);
-  await expect(fieldDialog.getByLabel("Input mask pattern")).toHaveCount(0);
+  await expect(fieldDialog.getByLabel("Regex-style mask pattern")).toHaveCount(0);
   await fieldDialog.getByRole("button", { name: "Cancel" }).click();
   const dataTypes = page.getByLabel("Data types");
   await dataTypes.getByRole("button", { name: "Add data type" }).click();
@@ -858,12 +858,6 @@ test("data type rules block invalid creates and updates", async ({
   await fieldDialog.getByRole("button", { name: "Save field" }).click();
   expect((await resizeResponse).ok()).toBe(true);
   await expect(fieldDialog).toHaveCount(0);
-  await page.getByRole("button", { name: "Edit field note" }).click();
-  fieldDialog = page.getByRole("dialog", { name: "Edit database field" });
-  await fieldDialog.getByLabel("Control / behavior").selectOption("text");
-  await fieldDialog.getByRole("button", { name: "Save field" }).click();
-  await expect(fieldDialog).toHaveCount(0);
-
   await dataTypes.getByRole("button", { name: "Default", exact: true }).click();
   await dataTypes.getByLabel("Configure title for Default").click();
   let typeFieldDialog = page.getByRole("dialog", {
@@ -878,7 +872,8 @@ test("data type rules block invalid creates and updates", async ({
   typeFieldDialog = page.getByRole("dialog", {
     name: "Data type field settings",
   });
-  await typeFieldDialog.getByLabel("Input mask pattern").fill("AA-##?");
+  await expect(typeFieldDialog.getByLabel("Numbers only")).toHaveCount(0);
+  await typeFieldDialog.getByLabel("Regex-style mask pattern").fill("AA-##?");
   await typeFieldDialog
     .getByRole("button", { name: "Save field settings" })
     .click();
@@ -899,7 +894,7 @@ test("data type rules block invalid creates and updates", async ({
   await typeFieldDialog.getByRole("button", { name: "Cancel" }).click();
   await reloadedTypes.getByLabel("Configure note for Default").click();
   typeFieldDialog = page.getByRole("dialog", { name: "Data type field settings" });
-  await expect(typeFieldDialog.getByLabel("Input mask pattern")).toHaveValue("AA-##?");
+  await expect(typeFieldDialog.getByLabel("Regex-style mask pattern")).toHaveValue("AA-##?");
   await typeFieldDialog.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("button", { name: "Data browser", exact: true }).click();
   await page

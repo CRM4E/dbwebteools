@@ -100,6 +100,7 @@ public partial class ApiTests
             Mask: new(Pattern: "AA-##?")
         );
         LayoutRules.ValidateMaskConfiguration(field, column);
+        LayoutRules.ValidateMaskConfiguration(field with { Widget = "auto" }, column);
         foreach (var valid in new[] { "AB-1", "AB-12" })
             LayoutRules.ValidateMaskValues(
                 [field],

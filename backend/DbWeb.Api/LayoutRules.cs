@@ -89,7 +89,7 @@ public static class LayoutRules
         var mask = field.Mask;
         if (mask == null)
             return;
-        if (field.Widget is not "text" and not "textarea")
+        if (field.Widget is not "auto" and not "text" and not "textarea")
             throw new ApiError(400, "Input masks are supported only for text controls.");
         if (field.ReadOnly || column.Generated || column.AutoIncrement)
             throw new ApiError(400, "Input masks require an editable stored field.");

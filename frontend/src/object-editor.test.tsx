@@ -108,7 +108,7 @@ describe("Object field workflow", () => {
       defaultDataTypeKey: undefined as never,
       fields: definition.fields.map((field) =>
         field.name === "title"
-          ? { ...field, required: true, mask: { pattern: "AA-##?" } }
+          ? { ...field, widget: "auto", required: true, mask: { pattern: "AA-##?" } }
           : field,
       ),
     });
@@ -116,13 +116,14 @@ describe("Object field workflow", () => {
     await screen.findByText("varchar(100)");
     fireEvent.click(screen.getByRole("button", { name: "Edit field title" }));
     expect(screen.queryByLabelText("title required")).toBeNull();
-    expect(screen.queryByLabelText("Input mask pattern")).toBeNull();
+    expect(screen.queryByLabelText("Regex-style mask pattern")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Configure title for Default" }));
     expect((screen.getByLabelText("Required") as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByLabelText("Input mask pattern") as HTMLInputElement).value).toBe("AA-##?");
-    fireEvent.change(screen.getByLabelText("Input mask pattern"), { target: { value: "###" } });
+    expect((screen.getByLabelText("Regex-style mask pattern") as HTMLInputElement).value).toBe("AA-##?");
+    expect(screen.queryByLabelText("Numbers only")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Regex-style mask pattern"), { target: { value: "###" } });
     fireEvent.click(screen.getByRole("button", { name: "Save field settings" }));
     await waitFor(() =>
       expect(api).toHaveBeenCalledWith(

@@ -13,6 +13,7 @@ const emptySetting = (name: string): DataTypeField => ({
 export function reconcileDataTypes(
   dataTypes: DataTypeDefinition[],
   fields: ObjectField[],
+  maskEligibleFieldNames?: ReadonlySet<string>,
 ): DataTypeDefinition[] {
   const names = new Set(fields.map((field) => field.name));
   return dataTypes.map((dataType) => ({
@@ -29,7 +30,10 @@ export function reconcileDataTypes(
       } else {
         setting.enabledOptionKeys = [];
       }
-      if (!["text", "textarea"].includes(field.widget)) setting.mask = null;
+      const maskEligible = maskEligibleFieldNames
+        ? maskEligibleFieldNames.has(field.name)
+        : ["text", "textarea"].includes(field.widget);
+      if (!maskEligible) setting.mask = null;
       if (field.readOnly || ["join", "formula", "sumup"].includes(field.widget)) {
         setting.required = false;
         setting.mask = null;
@@ -43,6 +47,7 @@ export function normalizeDataTypes(
   fields: ObjectField[],
   dataTypes?: DataTypeDefinition[] | null,
   defaultDataTypeKey?: string | null,
+  maskEligibleFieldNames?: ReadonlySet<string>,
 ) {
   const supplied = (dataTypes || []).filter((dataType) => dataType.key);
   const normalized = reconcileDataTypes(
@@ -58,6 +63,7 @@ export function normalizeDataTypes(
           })),
         }],
     fields,
+    maskEligibleFieldNames,
   );
   const requested = normalized.some((dataType) => dataType.key === defaultDataTypeKey)
     ? defaultDataTypeKey!
@@ -97,12 +103,14 @@ export function DataTypesEditor({
   dataTypes,
   defaultDataTypeKey,
   fields,
+  maskEligibleFieldNames,
   disabled,
   save,
 }: {
   dataTypes: DataTypeDefinition[];
   defaultDataTypeKey: string;
   fields: ObjectField[];
+  maskEligibleFieldNames?: ReadonlySet<string>;
   disabled?: boolean;
   save: (dataTypes: DataTypeDefinition[], defaultDataTypeKey: string) => Promise<void>;
 }) {
@@ -145,7 +153,7 @@ export function DataTypesEditor({
     setSaving(true);
     setError("");
     try {
-      await save(reconcileDataTypes(next, fields), defaultKey);
+      await save(reconcileDataTypes(next, fields, maskEligibleFieldNames), defaultKey);
       return true;
     } catch (reason) {
       setError((reason as Error).message);
@@ -159,12 +167,7 @@ export function DataTypesEditor({
     setFieldDraft((old) => old ? { ...old, setting: { ...old.setting, ...patch } } : old);
   const mask = fieldDraft?.setting.mask;
   const maskError = mask ? maskConfigurationError(mask) : null;
-  const numbersOnly =
-    mask?.pattern == null &&
-    mask?.characterSet === "digits" &&
-    (mask.minimumLength ?? 1) === 1 &&
-    !(mask.requiredCharacters || "");
-  const customLegacyMask = !!mask && mask.pattern == null && !numbersOnly;
+  const legacyMask = !!mask && mask.pattern == null;
   const configuredField = fields.find((field) => field.name === fieldDraft?.setting.name);
 
   return (
@@ -250,14 +253,16 @@ export function DataTypesEditor({
       }}>
         <div className="modal-header"><h2>{configuredField.label || configuredField.name} settings</h2><button type="button" aria-label="Close field settings dialog" onClick={() => setFieldDraft(null)}>×</button></div>
         <label className="check"><input type="checkbox" aria-label="Required" checked={fieldDraft.setting.required} disabled={saving} onChange={(event) => patchSetting({ required: event.target.checked })} />Required</label>
-        {["text", "textarea"].includes(configuredField.widget) && (
+        {(maskEligibleFieldNames
+          ? maskEligibleFieldNames.has(configuredField.name)
+          : ["text", "textarea"].includes(configuredField.widget)) && (
           <div className="lookup-config" aria-label="Input mask configuration">
             <h3>Input mask</h3>
             <div className="form-grid">
               <label>
-                Pattern
+                Regex-style mask pattern
                 <input
-                  aria-label="Input mask pattern"
+                  aria-label="Regex-style mask pattern"
                   aria-describedby="data-type-mask-help data-type-mask-status"
                   maxLength={1024}
                   disabled={saving}
@@ -269,30 +274,16 @@ export function DataTypesEditor({
                   }
                 />
               </label>
-              <label className="check">
-                <input
-                  type="checkbox"
-                  aria-label="Numbers only"
-                  disabled={saving}
-                  checked={numbersOnly}
-                  onChange={(event) =>
-                    patchSetting({
-                      mask: event.target.checked
-                        ? { characterSet: "digits", minimumLength: 1, requiredCharacters: "" }
-                        : null,
-                    })
-                  }
-                />
-                Numbers only
-              </label>
             </div>
             <p id="data-type-mask-help" className="muted">
-              # number · A letter · X letter or number · add ? after any position to make it optional.
+              Use # for an ASCII digit, A for a letter, and X for a letter or digit.
+              Add ? after a position to make it optional. Example: ### accepts exactly
+              three digits; AA-### accepts two letters, a dash, and three digits.
             </p>
-            {customLegacyMask && (
+            {legacyMask && (
               <p className="muted">
-                Existing custom rule: {maskTip(mask!)} Replace it by entering a pattern,
-                selecting Numbers only, or removing it.
+                Existing legacy rule: {maskTip(mask!)} Replace it by entering a pattern
+                or remove it.
               </p>
             )}
             <p
