@@ -199,6 +199,7 @@ test("configure a relation and select, search, reopen and clear its key", async 
   await page.getByRole("combobox", { name: "Table", exact: true }).selectOption("lookup_orders");
   await page.getByLabel("person_id label", { exact: true }).fill("Customer");
   await page.getByRole("button", { name: "Save layout", exact: true }).click();
+  await expect(page.getByText("Layout saved.", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Data browser" }).click();
   await page
     .getByRole("combobox", { name: "Connection", exact: true })
@@ -457,7 +458,7 @@ test("date/time and keyed dropdown layouts preserve values and enforce unique op
     edit.getByLabel("status", { exact: true }).getByRole("option", {
       name: "Draft document (not available)",
     }),
-  ).toBeDisabled();
+  ).toHaveAttribute("disabled", "");
   await expect(
     edit.getByLabel("status", { exact: true }).getByRole("option", {
       name: "Ready to publish",
@@ -573,7 +574,11 @@ test("list columns and read-only joins refresh when a lookup changes", async ({
   await expect(
     page.getByRole("region", { name: "Table structure" }),
   ).toHaveCount(0);
-  await expect(objectDefinition.getByRole("table")).toHaveCount(1);
+  await expect(
+    objectDefinition.getByRole("table").filter({
+      has: page.getByRole("columnheader", { name: "Database definition" }),
+    }),
+  ).toHaveCount(1);
   await expect(objectDefinition).toContainText("Database definition");
   await expect(
     page.getByLabel("person_id section", { exact: true }),
@@ -845,6 +850,11 @@ test("data type rules block invalid creates and updates", async ({
   );
   await fieldDialog.getByRole("button", { name: "Save field" }).click();
   expect((await resizeResponse).ok()).toBe(true);
+  await expect(fieldDialog).toHaveCount(0);
+  await page.getByRole("button", { name: "Edit field note" }).click();
+  fieldDialog = page.getByRole("dialog", { name: "Edit database field" });
+  await fieldDialog.getByLabel("Control / behavior").selectOption("text");
+  await fieldDialog.getByRole("button", { name: "Save field" }).click();
   await expect(fieldDialog).toHaveCount(0);
 
   await dataTypes.getByLabel("Set Secondary as default").click();

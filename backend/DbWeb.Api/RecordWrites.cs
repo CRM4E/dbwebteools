@@ -60,9 +60,16 @@ public static class RecordWrites
             var stored = ObjectModel.Stored(layout?.FieldsJson);
             fields = ObjectModel.Merge(stored).Fields;
             var columns = await s.Columns(c, table);
-            if (op == "create")
+            var hasManagedDataType = columns.Any(column => DataTypeColumn.Is(column.Name));
+            if (
+                op == "create"
+                && (
+                    hasManagedDataType
+                    || ObjectModel.HasCanonicalDataTypes(layout?.FieldsJson)
+                )
+            )
                 DataTypeColumn.RequireReady(columns);
-            if (columns.Any(column => DataTypeColumn.Is(column.Name)))
+            if (hasManagedDataType)
             {
                 if (input.Values.Keys.Any(DataTypeColumn.Is))
                     throw new ApiError(400, "datatype is managed by the backend and cannot be edited.");

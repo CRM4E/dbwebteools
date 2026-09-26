@@ -80,7 +80,6 @@ test("define pages and drill through related tabs with record keys and browser h
               hidden: false,
               readOnly: false,
               widget: "lookup",
-              required: true,
               lookup: {
                 table: "z_page_customers",
                 keyColumn: "id",
@@ -99,7 +98,6 @@ test("define pages and drill through related tabs with record keys and browser h
               hidden: false,
               readOnly: false,
               widget: "text",
-              required: true,
             },
             {
               name: "line_total",
@@ -149,6 +147,29 @@ test("define pages and drill through related tabs with record keys and browser h
           { method: "PUT", headers, body: JSON.stringify(fields) },
         );
         if (!saved.ok) throw new Error("Related lookup layout failed");
+        if (table === "z_page_orders") {
+          const objectResponse = await fetch(
+            `/api/admin/connections/${id}/tables/${table}/object`,
+          );
+          if (!objectResponse.ok) throw new Error("Related object load failed");
+          const definition = await objectResponse.json();
+          const active = definition.dataTypes.find(
+            (dataType: { key: string }) =>
+              dataType.key === definition.defaultDataTypeKey,
+          );
+          active.fields = active.fields.map(
+            (field: { name: string; required: boolean }) => ({
+              ...field,
+              required: ["customer_id", "copied_email"].includes(field.name),
+            }),
+          );
+          const configured = await fetch(
+            `/api/admin/connections/${id}/tables/${table}/object`,
+            { method: "PUT", headers, body: JSON.stringify(definition) },
+          );
+          if (!configured.ok)
+            throw new Error("Related data type configuration failed");
+        }
       }
       return id as number;
     },

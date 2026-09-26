@@ -232,6 +232,20 @@ public partial class ApiTests
                 "SELECT COUNT(*) FROM information_schema.COLUMNS "
                 + $"WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='{table}' AND COLUMN_NAME='datatype'";
             Assert.Equal(0, Convert.ToInt32(await command.ExecuteScalarAsync()));
+
+            // Existing tables remain writable until their object configuration is
+            // explicitly saved and the managed datatype column is provisioned.
+            // Ordinary reads and create previews must not turn a rollout into a
+            // write outage for every as-yet-unconfigured table.
+            var apiRoot = $"/api/connections/{connectionId}/tables/{table}";
+            (await admin.PostAsJsonAsync(apiRoot + "/create", new
+            {
+                values = new
+                {
+                    title = "Before provisioning"
+                }
+            }))
+                .EnsureSuccessStatusCode();
             definition = definition with
             {
                 DataTypes =
@@ -261,8 +275,10 @@ public partial class ApiTests
             }
             command.CommandText = $"SELECT datatype FROM `{table}` WHERE title='Existing'";
             Assert.Equal("primary", (string?)await command.ExecuteScalarAsync());
+            command.CommandText =
+                $"SELECT datatype FROM `{table}` WHERE title='Before provisioning'";
+            Assert.Equal("primary", (string?)await command.ExecuteScalarAsync());
 
-            var apiRoot = $"/api/connections/{connectionId}/tables/{table}";
             Assert.Equal(
                 HttpStatusCode.Forbidden,
                 (

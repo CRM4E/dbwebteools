@@ -302,7 +302,14 @@ public sealed class FieldAccess(Dictionary<string, string>? levels)
     {
         var keys = result.Columns.Where(c => c.PrimaryKey).Select(c => c.Name).ToList();
         result.HasPrimaryKey = keys.Count > 0;
-        var restricted = access.Explicit || result.Columns.Any(col => !visible.Contains(col.Name));
+        // The backend-managed datatype column is intentionally omitted from every
+        // response. Its presence alone must not make an otherwise unrestricted row
+        // use protected record keys and versions. Actual field restrictions still do.
+        var restricted =
+            access.Explicit
+            || result.Columns.Any(col =>
+                !DataTypeColumn.Is(col.Name) && !visible.Contains(col.Name)
+            );
         for (var i = 0; i < result.Rows.Count; i++)
         {
             var row = result.Rows[i];
