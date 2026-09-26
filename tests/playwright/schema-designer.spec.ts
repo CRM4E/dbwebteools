@@ -122,6 +122,7 @@ test("design tables through field dialogs, persist edits and delete metadata", a
   await createField(dialog);
   await expect(page.getByRole("region", { name: "Object definition" })).toContainText("varchar(255)");
   const dataTypes = page.getByLabel("Data types");
+  await dataTypes.getByRole("button", { name: "Default", exact: true }).click();
   await dataTypes.getByLabel("Configure email for Default").click();
   const emailSettings = page.getByRole("dialog", {
     name: "Data type field settings",
