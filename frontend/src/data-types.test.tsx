@@ -98,7 +98,7 @@ describe("data type metadata", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Configure title for Default" }));
-    expect(screen.getByText(/Existing custom rule: Use at least 4 characters/)).toBeTruthy();
+    expect(screen.getByText(/Existing legacy rule: Use at least 4 characters/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Remove input mask" }));
     fireEvent.click(screen.getByRole("button", { name: "Save field settings" }));
     await waitFor(() => expect(save).toHaveBeenCalled());
