@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { api, type Field, type FieldSetRule } from "./api";
+import { api, type DataTypeDefinition, type Field, type FieldSetRule } from "./api";
 
 type Candidate = { name: string; label: string };
 
@@ -7,6 +7,7 @@ export function FieldSetRulesEditor({
   value,
   fields,
   runtimeFields,
+  dataTypes,
   connection,
   table,
   disabled,
@@ -15,6 +16,7 @@ export function FieldSetRulesEditor({
   value: FieldSetRule[];
   fields: Candidate[];
   runtimeFields: Field[];
+  dataTypes: DataTypeDefinition[];
   connection: number;
   table: string;
   disabled?: boolean;
@@ -38,6 +40,11 @@ export function FieldSetRulesEditor({
       index,
     });
   const complete = !!draft?.field && !!draft.condition.trim() && !!draft.value.trim();
+  const dataTypeExpression = (key: string) =>
+    "'" + key.replaceAll("\\", "\\\\").replaceAll("'", "\\'") + "'";
+  const selectedDataTypeKey = draft?.field === "datatype"
+    ? dataTypes.find((dataType) => draft.value === dataTypeExpression(dataType.key))?.key || ""
+    : "";
   return (
     <section className="field-set-rules" aria-label="Field set rules">
       <div className="card-title">
@@ -80,6 +87,10 @@ export function FieldSetRulesEditor({
               {fields.map((field) => <option key={field.name} value={field.name}>{field.label} · {field.name}</option>)}
             </select></label>
             <label>Condition formula<textarea aria-label="Set rule condition formula" maxLength={1024} required value={draft.condition} disabled={disabled} onChange={(event) => updateDraft({ ...draft, condition: event.target.value })} /></label>
+            {draft.field === "datatype" && <label>Data type<select aria-label="Set rule data type" value={selectedDataTypeKey} disabled={disabled} onChange={(event) => updateDraft({ ...draft, value: event.target.value ? dataTypeExpression(event.target.value) : "" })}>
+              <option value="">Select data type</option>
+              {dataTypes.map((dataType) => <option key={dataType.key} value={dataType.key}>{dataType.label}</option>)}
+            </select></label>}
             <label>Value formula<textarea aria-label="Set rule value formula" maxLength={1024} required value={draft.value} disabled={disabled} onChange={(event) => updateDraft({ ...draft, value: event.target.value })} /></label>
           </div>
           <p className="muted">Use stored fields as <code>[field_name]</code>. Conditions must return true or false; values use the same formula functions as calculated fields.</p>
