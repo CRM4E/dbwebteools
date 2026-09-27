@@ -130,6 +130,53 @@ public partial class ApiTests
             (await admin.PutAsJsonAsync(objectPath, definition)).EnsureSuccessStatusCode();
             var saved = (await admin.GetFromJsonAsync<ObjectDefinition>(objectPath))!;
             Assert.Equal(2, saved.FieldSetRules!.Count);
+            var draftFields = (
+                await admin.GetFromJsonAsync<JsonElement>(apiPath + "/settings")
+            ).GetProperty("fields");
+            var validationPath =
+                $"/api/admin/connections/{id}/tables/{table}/field-set-rules/validate";
+            (
+                await admin.PostAsJsonAsync(
+                    validationPath,
+                    new
+                    {
+                        field = "status",
+                        condition = "[qty] > 0",
+                        value = "Concat('qty-', [qty])",
+                        fields = draftFields,
+                    }
+                )
+            ).EnsureSuccessStatusCode();
+            Assert.Equal(
+                HttpStatusCode.BadRequest,
+                (
+                    await admin.PostAsJsonAsync(
+                        validationPath,
+                        new
+                        {
+                            field = "status",
+                            condition = "[qty] >",
+                            value = "'invalid'",
+                            fields = draftFields,
+                        }
+                    )
+                ).StatusCode
+            );
+            Assert.Equal(
+                HttpStatusCode.BadRequest,
+                (
+                    await admin.PostAsJsonAsync(
+                        validationPath,
+                        new
+                        {
+                            field = "status",
+                            condition = "true",
+                            value = "[generated_total]",
+                            fields = draftFields,
+                        }
+                    )
+                ).StatusCode
+            );
             var legacySave = (await admin.GetFromJsonAsync<JsonObject>(objectPath))!;
             Assert.True(legacySave.Remove("fieldSetRules"));
             (await admin.PutAsJsonAsync(objectPath, legacySave)).EnsureSuccessStatusCode();

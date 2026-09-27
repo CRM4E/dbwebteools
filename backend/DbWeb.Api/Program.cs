@@ -1524,6 +1524,30 @@ admin.MapPost(
         );
     }
 );
+admin.MapPost(
+    "/connections/{id:int}/tables/{table}/field-set-rules/validate",
+    async (int id, string table, FieldSetRuleValidationInput input, AppDb db, DatabaseService service) =>
+    {
+        await using var c = await service.Open(
+            await db.Connections.FindAsync(id) ?? throw new ApiError(404, "Connection not found.")
+        );
+        var fields = input.Fields ?? [];
+        if (fields.Count > 200 || fields.Any(field => field == null))
+            throw new ApiError(400, "Invalid draft layout fields.");
+        var columns = await service.Columns(c, table);
+        if (!columns.Any(column => DataTypeColumn.Is(column.Name)))
+            columns.Add(new(DataTypeColumn.Name, "varchar", false, false, false, false, null, 64));
+        ObjectConfigurationRules.ValidateFieldSetRule(
+            new(input.Field ?? "", input.Condition ?? "", input.Value ?? ""),
+            columns,
+            fields
+        );
+        return Results.Ok(new
+        {
+            message = "Field set rule formulas are valid. Syntax, field references and target eligibility checked; results depend on record values.",
+        });
+    }
+);
 admin.MapGet(
     "/connections/{id:int}/tables/{table}/sumups/relations",
     async (int id, string table, AppDb db, DatabaseService service) =>
