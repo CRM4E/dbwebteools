@@ -36,6 +36,13 @@ test("configure a field set rule and apply it when saving a record", async ({ pa
   await page.getByRole("combobox", { name: "Connection", exact: true }).selectOption(String(id));
   await page.getByRole("combobox", { name: "Table", exact: true }).selectOption("z_editor_records");
   await page.getByRole("button", { name: "Add set rule" }).click();
+  await page.getByLabel("Set rule field").selectOption("datatype");
+  await expect(page.getByLabel("Set rule data type").locator("option")).toHaveText([
+    "Select data type",
+    "Default",
+  ]);
+  await page.getByLabel("Set rule data type").selectOption("default");
+  await expect(page.getByLabel("Set rule value formula")).toHaveValue("'default'");
   await page.getByLabel("Set rule field").selectOption("status");
   await page.getByLabel("Set rule condition formula").fill("[title] =");
   await page.getByLabel("Set rule value formula").fill("'published'");

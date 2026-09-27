@@ -1100,6 +1100,7 @@ export function ObjectEditor({
                 value={fieldSetRules}
                 fields={fieldSetCandidates}
                 runtimeFields={runtimeFields}
+                dataTypes={dataTypes}
                 connection={connection}
                 table={table}
                 disabled={busy || objectLoading}

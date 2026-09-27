@@ -92,6 +92,30 @@ describe("Object field workflow", () => {
     ));
   });
 
+  it("selects a datatype by label and stores its key as a rule formula", async () => {
+    mockApi({
+      ...definition,
+      dataTypes: [
+        { key: "default", label: "Standard customer", fields: [] },
+        { key: "premium", label: "Premium customer", fields: [] },
+      ],
+      defaultDataTypeKey: "default",
+    });
+    render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
+    await screen.findByText("varchar(100)");
+
+    fireEvent.click(screen.getByRole("button", { name: "Add set rule" }));
+    fireEvent.change(screen.getByLabelText("Set rule field"), { target: { value: "datatype" } });
+    const select = screen.getByLabelText("Set rule data type") as HTMLSelectElement;
+    expect(Array.from(select.options).map((option) => [option.value, option.text])).toEqual([
+      ["", "Select data type"],
+      ["default", "Standard customer"],
+      ["premium", "Premium customer"],
+    ]);
+    fireEvent.change(select, { target: { value: "premium" } });
+    expect((screen.getByLabelText("Set rule value formula") as HTMLTextAreaElement).value).toBe("'premium'");
+  });
+
   it("places object action buttons above the Data Types section", async () => {
     mockApi();
     render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
