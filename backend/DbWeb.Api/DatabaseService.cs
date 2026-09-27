@@ -366,7 +366,8 @@ public partial class DatabaseService(IDataProtectionProvider protection)
         string operation,
         List<LayoutField>? fields = null,
         Func<MySqlTransaction, Task>? prepare = null,
-        List<SumupPlan>? sumups = null
+        List<SumupPlan>? sumups = null,
+        List<FieldSetRule>? fieldSetRules = null
     )
     {
         if (input.Values == null)
@@ -428,7 +429,6 @@ public partial class DatabaseService(IDataProtectionProvider protection)
             if (input.Version != Version(existing[0]))
                 throw new ApiError(409, "This record changed. Refresh before saving.");
         }
-        await CheckSumupParent(db, tx, plans, table, current, input, operation);
         if (operation != "delete")
         {
             foreach (
@@ -456,7 +456,20 @@ public partial class DatabaseService(IDataProtectionProvider protection)
             LayoutRules.ValidateEmailValues(fields ?? [], input.Values);
             LayoutRules.ValidateMaskValues(fields ?? [], input.Values);
             LayoutRules.ValidateRequiredValues(fields ?? [], input.Values, current);
+            FieldSetRules.Apply(
+                fieldSetRules ?? [],
+                fields ?? [],
+                cols,
+                current,
+                input.Values,
+                (value, column) => _ = Value(value, column)
+            );
+            LayoutRules.ValidateDropdownValues(fields ?? [], input.Values);
+            LayoutRules.ValidateEmailValues(fields ?? [], input.Values);
+            LayoutRules.ValidateMaskValues(fields ?? [], input.Values);
+            LayoutRules.ValidateRequiredValues(fields ?? [], input.Values, current);
         }
+        await CheckSumupParent(db, tx, plans, table, current, input, operation);
         var names = input.Values.Keys.ToList();
         for (int i = 0; i < names.Count; i++)
             cmd.Parameters.AddWithValue(

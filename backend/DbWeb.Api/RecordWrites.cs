@@ -5,6 +5,11 @@ using static DbWeb.Api.TableAccess;
 
 namespace DbWeb.Api;
 
+public record ValidatedRecordWrite(
+    List<LayoutField> Fields,
+    List<FieldSetRule> FieldSetRules
+);
+
 public static class RecordWrites
 {
     public static async Task<Dictionary<string, JsonElement>> Preview(
@@ -18,7 +23,7 @@ public static class RecordWrites
     )
     {
         var values = new Dictionary<string, JsonElement>(initial ?? []);
-        var fields = await Validate(
+        var validated = await Validate(
             db,
             ctx,
             id,
@@ -28,6 +33,7 @@ public static class RecordWrites
             service,
             c
         );
+        var fields = validated.Fields;
         await service.ValidateCopyMappings(c, fields, await service.Columns(c, table));
         foreach (
             var field in fields.Where(f =>
@@ -40,7 +46,7 @@ public static class RecordWrites
         return values;
     }
 
-    public static async Task<List<LayoutField>> Validate(
+    public static async Task<ValidatedRecordWrite> Validate(
         AppDb db,
         HttpContext ctx,
         int id,
@@ -52,6 +58,7 @@ public static class RecordWrites
     )
     {
         List<LayoutField> fields = [];
+        List<FieldSetRule> fieldSetRules = [];
         if (op != "delete" && input.Values != null)
         {
             var layout = await db.Layouts.SingleOrDefaultAsync(x =>
@@ -59,6 +66,7 @@ public static class RecordWrites
             );
             var stored = ObjectModel.Stored(layout?.FieldsJson);
             fields = ObjectModel.Merge(stored).Fields;
+            fieldSetRules = stored.Object.FieldSetRules ?? [];
             var columns = await s.Columns(c, table);
             var hasManagedDataType = columns.Any(column => DataTypeColumn.Is(column.Name));
             if (
@@ -118,6 +126,6 @@ public static class RecordWrites
             }
         }
 
-        return fields;
+        return new(fields, fieldSetRules);
     }
 }

@@ -427,6 +427,27 @@ tbody tr:hover {
   margin-left: auto;
   justify-content: flex-end;
 }
+.field-set-rules {
+  padding: 20px 24px;
+  border-top: 1px solid #e8ede6;
+}
+.field-set-rules .card-title {
+  margin-bottom: 14px;
+}
+.field-set-rules code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.field-set-rules .inline-editor {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #dfe7dc;
+  border-radius: 8px;
+  background: #fbfdf9;
+}
+.field-set-rules textarea {
+  min-height: 84px;
+}
 .icon-btn {
   border: 0;
   background: transparent;

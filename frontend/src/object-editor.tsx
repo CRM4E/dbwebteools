@@ -6,6 +6,7 @@ import {
   type ObjectDefinition,
   type ObjectField,
   type DataTypeDefinition,
+  type FieldSetRule,
   type Field,
   type ListView,
 } from "./api";
@@ -17,6 +18,7 @@ import { CreationDefaultEditor } from "./creation-defaults";
 import { FormulaValidator } from "./formula-validator";
 import { SumupConfiguration } from "./sumups";
 import { DataTypesEditor, normalizeDataTypes, reconcileDataTypes } from "./data-types";
+import { FieldSetRulesEditor } from "./field-set-rules";
 
 type SchemaColumn = {
   name: string;
@@ -112,6 +114,7 @@ export function ObjectEditor({
     [objectFields, setObjectFields] = useState<ObjectField[]>([]),
     [dataTypes, setDataTypes] = useState<DataTypeDefinition[]>([]),
     [defaultDataTypeKey, setDefaultDataTypeKey] = useState(""),
+    [fieldSetRules, setFieldSetRules] = useState<FieldSetRule[]>([]),
     [objectView, setObjectView] = useState<ListView>({}),
     [objectLoading, setObjectLoading] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null),
@@ -159,6 +162,7 @@ export function ObjectEditor({
     setObjectFields([]);
     setDataTypes([]);
     setDefaultDataTypeKey("");
+    setFieldSetRules([]);
     setObjectView({});
     setError("");
     setLoading(true);
@@ -182,6 +186,7 @@ export function ObjectEditor({
             setObjectFields(canonicalObjectFields(object.fields));
             setDataTypes(normalized.dataTypes);
             setDefaultDataTypeKey(normalized.defaultDataTypeKey);
+            setFieldSetRules(object.fieldSetRules || []);
             setObjectView(object.view || {});
           }
         })
@@ -247,6 +252,7 @@ export function ObjectEditor({
           fields: canonicalObjectFields(objectFields),
           dataTypes: nextDataTypes,
           defaultDataTypeKey: nextDefaultDataTypeKey,
+          fieldSetRules,
           view: objectView,
         },
       );
@@ -302,6 +308,21 @@ export function ObjectEditor({
     showInList: true,
     listOrder: index,
   }));
+  const fieldSetCandidates = objectFields
+    .filter((field) => {
+      const column = schema?.columns.find((candidate) => candidate.name === field.name);
+      return !!column
+        && !column.generated
+        && !column.autoIncrement
+        && !column.primaryKey
+        && !field.readOnly
+        && !field.lookup
+        && field.name !== "datatype"
+        && !column.type.toLowerCase().includes("blob")
+        && !["binary", "varbinary", "geometry"].includes(column.type.toLowerCase())
+        && !["join", "formula", "sumup"].includes(field.widget);
+    })
+    .map((field) => ({ name: field.name, label: field.label || field.name }));
   const patchField = (patch: Partial<ObjectField>) =>
     setFieldDraft((old) => (old ? { ...old, ...patch } : old));
   const databaseType = (widget: string) =>
@@ -545,6 +566,7 @@ export function ObjectEditor({
                   fields: nextFields,
                   dataTypes: nextDataTypes,
                   defaultDataTypeKey,
+                  fieldSetRules,
                   view: objectView,
                 },
               );
@@ -1073,6 +1095,13 @@ export function ObjectEditor({
                   </tbody>
                 </table>
               </div>
+              <FieldSetRulesEditor
+                key={`${connection}:${table}`}
+                value={fieldSetRules}
+                fields={fieldSetCandidates}
+                disabled={busy || objectLoading}
+                change={setFieldSetRules}
+              />
               <div className="object-editor-footer">
                 <div className="actions object-field-actions">
                   <button
@@ -1202,6 +1231,7 @@ export function ObjectEditor({
                               maskEligibleFields(objectFields, schema),
                             ),
                             defaultDataTypeKey,
+                            fieldSetRules,
                             view: {
                               ...objectView,
                               label: objectView.label?.trim(),

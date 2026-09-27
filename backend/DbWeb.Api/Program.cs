@@ -781,7 +781,13 @@ admin.MapDelete(
         var definition = stored.Object with
         {
             Fields = fields,
-            View = view
+            View = view,
+            FieldSetRules = (stored.Object.FieldSetRules ?? []).Where(rule =>
+                    !removed.Contains(rule.Field)
+                    && !Formulas.Dependencies(rule.Condition, columns, currentFields).Any(removed.Contains)
+                    && !Formulas.Dependencies(rule.Value, columns, currentFields).Any(removed.Contains)
+                )
+                .ToList()
         };
         var presentation = new LayoutPresentation(stored.Layout.Fields.Where(x => !removed.Contains(x.Name)).ToList());
         var cleaned = ObjectModel.Normalize(new(definition, presentation));
@@ -992,6 +998,11 @@ admin.MapPut(
         );
         var stored = ObjectModel.Stored(configuration?.FieldsJson);
         var submitted = ObjectModel.ParseObject(input);
+        if (configuration != null && !ObjectModel.HasProperty(input, "fieldSetRules"))
+            submitted = submitted with
+            {
+                FieldSetRules = stored.Object.FieldSetRules,
+            };
         if (
             configuration != null
             && ObjectModel.HasCanonicalDataTypes(configuration.FieldsJson)
@@ -1470,8 +1481,16 @@ foreach (var operation in new[] { "create", "update", "delete" })
             await using var gate = await SumupGate.Enter(c);
             var plans = await Sumups.Ready(db, s, c, id);
             input = await FieldAccess.DecodeMutation(db, ctx, id, table, input, op);
-            var fields = await RecordWrites.Validate(db, ctx, id, table, input, op, s, c);
-            await s.Mutate(c, table, input, op, fields, sumups: plans);
+            var validated = await RecordWrites.Validate(db, ctx, id, table, input, op, s, c);
+            await s.Mutate(
+                c,
+                table,
+                input,
+                op,
+                validated.Fields,
+                sumups: plans,
+                fieldSetRules: validated.FieldSetRules
+            );
             db.Audit.Add(
                 new()
                 {

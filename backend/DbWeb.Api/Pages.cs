@@ -726,7 +726,7 @@ public static class PageEndpoints
                             400,
                             "The parent relation is locked in this related list."
                         );
-                    var fields = await RecordWrites.Validate(
+                    var validated = await RecordWrites.Validate(
                         db,
                         ctx,
                         page.ConnectionId,
@@ -741,7 +741,7 @@ public static class PageEndpoints
                         tab.Table,
                         input.Mutation,
                         operation,
-                        fields,
+                        validated.Fields,
                         async tx =>
                         {
                             var parent = await service.PageRecord(
@@ -771,7 +771,8 @@ public static class PageEndpoints
                                 parentValue
                             );
                         },
-                        plans
+                        plans,
+                        validated.FieldSetRules
                     );
                     db.Audit.Add(
                         new()
@@ -910,7 +911,7 @@ public static class PageEndpoints
                         );
                     }
                     var mutation = new RowMutation(values, null, null);
-                    var fields = await RecordWrites.Validate(
+                    var validated = await RecordWrites.Validate(
                         db,
                         ctx,
                         page.ConnectionId,
@@ -925,13 +926,14 @@ public static class PageEndpoints
                         tab.Table,
                         mutation,
                         "create",
-                        fields,
+                        validated.Fields,
                         async tx =>
                         {
                             // Lock/reload the actual parent inside the insertion transaction; copy values are then re-read there too.
                             values[field.Name] = await ParentKey(tx);
                         },
-                        sumups: plans
+                        sumups: plans,
+                        fieldSetRules: validated.FieldSetRules
                     );
                     db.Audit.Add(
                         new()

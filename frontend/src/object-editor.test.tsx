@@ -34,6 +34,49 @@ function mockApi(objectDefinition: unknown = definition) {
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("Object field workflow", () => {
+  it("loads, edits, orders, deletes, and saves field set rules", async () => {
+    mockApi({
+      ...definition,
+      fieldSetRules: [
+        { field: "title", condition: "[title] = 'old'", value: "'first'" },
+      ],
+    });
+    render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
+    await screen.findByText("[title] = 'old'");
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit set rule 1" }));
+    fireEvent.change(screen.getByLabelText("Set rule condition formula"), {
+      target: { value: "Length([title]) > 3" },
+    });
+    fireEvent.change(screen.getByLabelText("Set rule value formula"), {
+      target: { value: "Upper([title])" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save set rule" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Add set rule" }));
+    expect((screen.getByRole("button", { name: "Save set rule" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Set rule condition formula"), {
+      target: { value: "true" },
+    });
+    fireEvent.change(screen.getByLabelText("Set rule value formula"), {
+      target: { value: "'fallback'" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save set rule" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move set rule 2 up" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete set rule 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save object" }));
+
+    await waitFor(() => expect(api).toHaveBeenCalledWith(
+      "/admin/connections/1/tables/things/object",
+      "PUT",
+      expect.objectContaining({
+        fieldSetRules: [
+          { field: "title", condition: "true", value: "'fallback'" },
+        ],
+      }),
+    ));
+  });
+
   it("places object action buttons above the Data Types section", async () => {
     mockApi();
     render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
