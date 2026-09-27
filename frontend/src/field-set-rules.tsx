@@ -12,6 +12,7 @@ export function FieldSetRulesEditor({
   table,
   disabled,
   change,
+  save,
 }: {
   value: FieldSetRule[];
   fields: Candidate[];
@@ -21,10 +22,12 @@ export function FieldSetRulesEditor({
   table: string;
   disabled?: boolean;
   change: (rules: FieldSetRule[]) => void;
+  save: (rules: FieldSetRule[]) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState<(FieldSetRule & { index: number | null }) | null>(null);
   const [feedback, setFeedback] = useState<{ message: string; valid: boolean } | null>(null);
   const [validating, setValidating] = useState(false);
+  const [saving, setSaving] = useState(false);
   const validationRevision = useRef(0);
   const updateDraft = (next: FieldSetRule & { index: number | null }) => {
     validationRevision.current++;
@@ -96,8 +99,8 @@ export function FieldSetRulesEditor({
           <p className="muted">Use stored fields as <code>[field_name]</code>. Conditions must return true or false; values use the same formula functions as calculated fields.</p>
           {feedback && <p role={feedback.valid ? "status" : "alert"} className={feedback.valid ? "notice" : "alert"}>{feedback.message}</p>}
           <div className="form-actions">
-            <button type="button" disabled={disabled || validating} onClick={() => setDraft(null)}>Cancel</button>
-            <button type="button" disabled={disabled || validating || !complete} onClick={async () => {
+            <button type="button" disabled={disabled || validating || saving} onClick={() => setDraft(null)}>Cancel</button>
+            <button type="button" disabled={disabled || validating || saving || !complete} onClick={async () => {
               if (!complete) return;
               const current = ++validationRevision.current;
               setValidating(true);
@@ -115,12 +118,17 @@ export function FieldSetRulesEditor({
                 if (current === validationRevision.current) setValidating(false);
               }
             }}>{validating ? "Validating…" : "Validate formulas"}</button>
-            <button type="button" className="primary" disabled={disabled || !complete} onClick={() => {
+            <button type="button" className="primary" disabled={disabled || saving || !complete} onClick={async () => {
               if (!complete) return;
               const rule = { field: draft.field, condition: draft.condition.trim(), value: draft.value.trim() };
-              change(draft.index == null ? [...value, rule] : value.map((candidate, index) => index === draft.index ? rule : candidate));
-              setDraft(null);
-            }}>Save set rule</button>
+              const next = draft.index == null ? [...value, rule] : value.map((candidate, index) => index === draft.index ? rule : candidate);
+              setSaving(true);
+              try {
+                if (await save(next)) setDraft(null);
+              } finally {
+                setSaving(false);
+              }
+            }}>{saving ? "Saving…" : "Save set rule"}</button>
           </div>
         </div>
       )}

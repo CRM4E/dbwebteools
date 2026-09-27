@@ -271,6 +271,40 @@ export function ObjectEditor({
       setBusy(false);
     }
   }
+  async function saveFieldSetRules(nextRules: FieldSetRule[]) {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      await api(
+        "/admin/connections/" + connection + "/tables/" + encodeURIComponent(table) + "/object",
+        "PUT",
+        {
+          fields: canonicalObjectFields(objectFields),
+          dataTypes: reconcileDataTypes(
+            dataTypes,
+            objectFields,
+            maskEligibleFields(objectFields, schema),
+          ),
+          defaultDataTypeKey,
+          fieldSetRules: nextRules,
+          view: {
+            ...objectView,
+            label: objectView.label?.trim(),
+          },
+        },
+      );
+      setFieldSetRules(nextRules);
+      setMessage("Field set rule saved.");
+      onChanged();
+      return true;
+    } catch (reason) {
+      setError((reason as Error).message);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
   const patch = (value: Partial<Draft>) =>
     setDraft((old) => (old ? { ...old, ...value } : old));
   const columns: Column[] = (schema?.columns || []).map((column) => ({
@@ -1105,6 +1139,7 @@ export function ObjectEditor({
                 table={table}
                 disabled={busy || objectLoading}
                 change={setFieldSetRules}
+                save={saveFieldSetRules}
               />
               <div className="object-editor-footer">
                 <div className="actions object-field-actions">

@@ -65,6 +65,17 @@ describe("Object field workflow", () => {
       }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Save set rule" }));
+    await waitFor(() => expect(api).toHaveBeenCalledWith(
+      "/admin/connections/1/tables/things/object",
+      "PUT",
+      expect.objectContaining({
+        fieldSetRules: [
+          { field: "title", condition: "Length([title]) > 3", value: "Upper([title])" },
+        ],
+      }),
+    ));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit field set rule" })).toBeNull());
+    expect(screen.getByText("Field set rule saved.")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Add set rule" }));
     expect(Array.from((screen.getByLabelText("Set rule field") as HTMLSelectElement).options)
@@ -77,6 +88,7 @@ describe("Object field workflow", () => {
       target: { value: "'fallback'" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save set rule" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add field set rule" })).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "Move set rule 2 up" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete set rule 2" }));
     fireEvent.click(screen.getByRole("button", { name: "Save object" }));

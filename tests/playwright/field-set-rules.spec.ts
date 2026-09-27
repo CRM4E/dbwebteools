@@ -51,9 +51,11 @@ test("configure a field set rule and apply it when saving a record", async ({ pa
   await page.getByLabel("Set rule condition formula").fill("[title] = 'Set rule browser'");
   await page.getByRole("button", { name: "Validate formulas" }).click();
   await expect(page.getByRole("status")).toContainText("Field set rule formulas are valid");
+  const ruleSave = page.waitForResponse((response) =>
+    response.request().method() === "PUT" && response.url().endsWith("/tables/z_editor_records/object"));
   await page.getByRole("button", { name: "Save set rule" }).click();
-  await page.getByRole("button", { name: "Save object", exact: true }).click();
-  await expect(page.getByText("Object saved. Application behavior updated.", { exact: true })).toBeVisible();
+  expect((await ruleSave).ok()).toBe(true);
+  await expect(page.getByText("Field set rule saved.", { exact: true })).toBeVisible();
 
   const configured = await page.evaluate(async (connectionId) =>
     await (await fetch(`/api/admin/connections/${connectionId}/tables/z_editor_records/object`)).json(), id);
