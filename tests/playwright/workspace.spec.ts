@@ -832,6 +832,21 @@ test("data type rules block invalid creates and updates", async ({
   await expect(fieldDialog.getByLabel("Regex-style mask pattern")).toHaveCount(0);
   await fieldDialog.getByRole("button", { name: "Cancel" }).click();
   const dataTypes = page.getByLabel("Data types");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await dataTypes.getByRole("button", { name: "Default", exact: true }).click();
+  for (const label of ["Data type list table", "Data type fields table"]) {
+    const scroller = page.getByLabel(label);
+    await expect(scroller).toBeVisible();
+    const dimensions = await scroller.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    }));
+    expect(dimensions.scrollWidth).toBeGreaterThan(dimensions.clientWidth);
+    await scroller.evaluate((element) => { element.scrollLeft = element.scrollWidth; });
+    expect(await scroller.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 720 });
   await dataTypes.getByRole("button", { name: "Add data type" }).click();
   let typeDialog = page.getByRole("dialog", { name: "Add data type" });
   await typeDialog.getByLabel("Data type key").fill("secondary");

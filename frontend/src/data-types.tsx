@@ -186,7 +186,7 @@ export function DataTypesEditor({
       </div>
       {error && <p className="alert" role="alert">{error}</p>}
       <div className="data-type-layout">
-        <div className="table-scroll">
+        <div className="table-scroll" aria-label="Data type list table">
           <table>
             <thead><tr><th>Label</th><th>Key</th><th>Default</th><th>Actions</th></tr></thead>
             <tbody>
@@ -212,7 +212,7 @@ export function DataTypesEditor({
         {selected && (
           <div className="data-type-fields">
             <h3>{selected.label} fields</h3>
-            <div className="table-scroll"><table>
+            <div className="table-scroll" aria-label="Data type fields table"><table>
               <thead><tr><th>Field</th><th>Required</th><th>Input mask</th><th>Dropdown values</th><th>Actions</th></tr></thead>
               <tbody>{fields.filter((field) => field.name !== "datatype").map((field) => {
                 const setting = selected.fields.find((item) => item.name === field.name) || emptySetting(field.name);
