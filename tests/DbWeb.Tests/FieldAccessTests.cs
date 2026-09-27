@@ -138,6 +138,23 @@ public partial class ApiTests
                 $"/api/admin/connections/{id}/tables/{table}/layout",
                 fields
             );
+            fields.Add(
+                new(
+                    "type_formula",
+                    "Record type",
+                    "",
+                    9,
+                    false,
+                    true,
+                    "formula",
+                    Formula: "[datatype]"
+                )
+            );
+            await SaveConfiguration(
+                admin,
+                $"/api/admin/connections/{id}/tables/{table}/layout",
+                fields
+            );
             await SaveConfiguration(
                 admin,
                 $"/api/admin/connections/{id}/tables/{child}/layout",
@@ -178,6 +195,9 @@ public partial class ApiTests
             using var member = factory.CreateClient();
             await Login(member, "fieldmember", "member-password-12345");
             Assert.Contains("SENSITIVE_TOKEN", await member.GetStringAsync(path + "/records"));
+            var unrestrictedSettings = await member.GetStringAsync(path + "/settings");
+            Assert.Contains("type_formula", unrestrictedSettings);
+            Assert.DoesNotContain("\"name\":\"datatype\"", unrestrictedSettings);
             Dictionary<string, string> policy = new()
             {
                 ["name"] = "write",
@@ -188,6 +208,7 @@ public partial class ApiTests
                 ["leak_formula"] = "read",
                 ["leak_dropdown"] = "read",
                 ["leak_join"] = "read",
+                ["type_formula"] = "read",
             };
             await Grant(table, policy);
             await Grant(target, new() { ["id"] = "read", ["name"] = "read" });
@@ -213,6 +234,11 @@ public partial class ApiTests
                 "VISIBLE NAME",
                 row.GetProperty("joinedValues").GetProperty("safe_formula").GetString()
             );
+            Assert.Equal(
+                "default",
+                row.GetProperty("joinedValues").GetProperty("type_formula").GetString()
+            );
+            Assert.False(row.GetProperty("values").TryGetProperty("datatype", out _));
             Assert.False(row.GetProperty("values").TryGetProperty("id", out _));
             Assert.True(records.GetProperty("hasPrimaryKey").GetBoolean());
             var key = new Dictionary<string, string>

@@ -177,7 +177,11 @@ public sealed class FieldAccess(Dictionary<string, string>? levels)
             try
             {
                 if (field.Widget == "formula")
-                    access.RequireRead(Formulas.Dependencies(field.Formula, columns, fields));
+                    access.RequireRead(
+                        Formulas
+                            .Dependencies(field.Formula, columns, fields)
+                            .Where(name => !DataTypeColumn.Is(name))
+                    );
                 if (field.Join is { } join)
                 {
                     access.RequireRead([join.SourceColumn]);
@@ -211,7 +215,9 @@ public sealed class FieldAccess(Dictionary<string, string>? levels)
                         )
                         {
                             // Dependencies need only stored names for parsing; metadata is never returned here.
-                            var refs = Formulas.Dependencies(formula.Formula, null, childFields);
+                            var refs = Formulas
+                                .Dependencies(formula.Formula, null, childFields)
+                                .Where(name => !DataTypeColumn.Is(name));
                             childAccess.RequireRead(refs);
                         }
                     }
