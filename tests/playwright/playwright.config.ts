@@ -1,6 +1,8 @@
 import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: ".",
+  // Browser specs share one app database and administrator account.
+  workers: 1,
   projects: [
     {
       name: "workspace",
