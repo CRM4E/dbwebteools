@@ -138,10 +138,16 @@ export type DataTypeDefinition = {
   label: string;
   fields: DataTypeField[];
 };
+export type FieldSetRule = {
+  field: string;
+  condition: string;
+  value: string;
+};
 export type ObjectDefinition = {
   fields: ObjectField[];
   dataTypes: DataTypeDefinition[];
   defaultDataTypeKey: string;
+  fieldSetRules?: FieldSetRule[];
   view?: ListView | null;
   sumupsPending?: boolean;
 };

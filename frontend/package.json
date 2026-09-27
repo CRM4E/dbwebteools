@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
-    "test": "vitest run"
+    "test": "vitest run --maxWorkers=2"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",

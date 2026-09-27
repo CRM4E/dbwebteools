@@ -29,6 +29,8 @@ public record ObjectDataTypeField(
 
 public record ObjectDataType(string Key, string Label, List<ObjectDataTypeField> Fields);
 
+public record FieldSetRule(string Field, string Condition, string Value);
+
 public record InputMask(
     string CharacterSet = "",
     int MinimumLength = 1,
@@ -41,7 +43,8 @@ public record ObjectDefinition(
     ListView? View = null,
     bool SumupsPending = false,
     List<ObjectDataType>? DataTypes = null,
-    string? DefaultDataTypeKey = null
+    string? DefaultDataTypeKey = null,
+    List<FieldSetRule>? FieldSetRules = null
 );
 
 public record FieldPresentation(
@@ -275,6 +278,7 @@ public static class ObjectModel
                 .ToList(),
             DataTypes = dataTypes,
             DefaultDataTypeKey = defaultKey,
+            FieldSetRules = (stored.Object.FieldSetRules ?? []).Where(rule => rule != null).ToList(),
         };
         return new(definition, new(layout));
     }

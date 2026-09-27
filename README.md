@@ -84,6 +84,12 @@ Under **Administration → Object editor**, click a stored field's **Edit** butt
 
 Save the object to activate defaults for new records only. Defaults appear when opening **Add record**, including in related tabs. Backend creation also fills omitted values for API clients; explicit values (including NULL or empty text), locked parent context, and lookup-copy results take precedence. Lookup defaults populate their copy mappings and require access to a matching source record. Existing records and database schema/defaults are unchanged. Generated, formula, joined and sum-up fields cannot have creation defaults. Defaults are literal values, not SQL or formula expressions. Standard required/dropdown/database constraints still apply; if a default lookup stops qualifying, revise the layout default or provide another valid key.
 
+## Field set rules
+
+Object editor can define ordered **Field set rules** for a table. Each rule selects a stored target field, a Boolean condition formula, and a value formula. Formulas use the same `[field_name]`, string, numeric, conditional, `Coalesce`, and `DropdownDisplay` syntax as calculated fields.
+
+Rules run from top to bottom after submitted values pass field validation and lookup copies are resolved, but before the record is written. Update rules evaluate against the complete locked record, including unchanged fields; later rules can use values assigned by earlier rules. A true condition replaces the target value, while a false condition leaves it unchanged. Generated, primary-key, managed datatype, lookup, read-only, sum-up, virtual, binary, and geometry fields cannot be targets. Formulas also cannot reference generated database columns because their post-write value is not available before the save. Rule-produced values are checked against their target field before save, and any evaluation error rejects and rolls back the write.
+
 ## List fields and read-only joined fields
 
 In **Administration → Layout editor**, set each field's **Label**, **Editor section**, **Show in editor**, and **Editor order** for forms/pages, plus **Show in list** and **List order** for record lists. Behavior is defined through each field's Object editor popup. Existing layouts without list settings keep all columns visible. Hidden primary keys remain available internally for correct editing/deletion. Selecting no list fields shows an explicit empty-column notice, without changing data access permissions.
