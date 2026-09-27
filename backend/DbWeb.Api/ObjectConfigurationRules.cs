@@ -4,6 +4,31 @@ namespace DbWeb.Api;
 
 public static class ObjectConfigurationRules
 {
+    public static void ValidateFieldSetRule(
+        FieldSetRule rule,
+        List<ColumnInfo> columns,
+        List<LayoutField> fields
+    )
+    {
+        if (string.IsNullOrWhiteSpace(rule.Field) || string.IsNullOrWhiteSpace(rule.Condition) || string.IsNullOrWhiteSpace(rule.Value))
+            throw new ApiError(400, "Every field set rule needs a field, condition, and value formula.");
+        var target = columns.SingleOrDefault(column => column.Name.Equals(rule.Field, StringComparison.OrdinalIgnoreCase));
+        var targetField = fields.SingleOrDefault(field => field.Name.Equals(rule.Field, StringComparison.OrdinalIgnoreCase));
+        var managedDataTypeTarget = target != null && DataTypeColumn.Is(target.Name);
+        if (
+            target == null || target.Generated || target.AutoIncrement || target.PrimaryKey
+            || target.Type.Contains("blob") || target.Type is "binary" or "varbinary" or "geometry"
+            || !managedDataTypeTarget && (targetField == null || targetField.ReadOnly || targetField.Lookup != null || targetField.Widget is "join" or "formula" or "sumup")
+        )
+            throw new ApiError(400, "Field set rules require an editable scalar stored target field or the managed datatype field.");
+        Formulas.Compile(rule.Condition, columns, fields);
+        Formulas.Compile(rule.Value, columns, fields);
+        var dependencies = Formulas.Dependencies(rule.Condition, columns, fields)
+            .Concat(Formulas.Dependencies(rule.Value, columns, fields));
+        if (dependencies.Any(name => columns.Any(column => column.Generated && column.Name.Equals(name, StringComparison.OrdinalIgnoreCase))))
+            throw new ApiError(400, "Field set rules cannot reference generated database columns.");
+    }
+
     static void ValidatePresentationCompleteness(
         ObjectDefinition definition,
         LayoutPresentation presentation
@@ -191,44 +216,7 @@ public static class ObjectConfigurationRules
         if (fieldSetRules.Count > 50 || fieldSetRules.Any(rule => rule == null))
             throw new ApiError(400, "Define at most 50 field set rules.");
         foreach (var rule in fieldSetRules)
-        {
-            if (
-                string.IsNullOrWhiteSpace(rule.Field)
-                || string.IsNullOrWhiteSpace(rule.Condition)
-                || string.IsNullOrWhiteSpace(rule.Value)
-            )
-                throw new ApiError(400, "Every field set rule needs a field, condition, and value formula.");
-            var target = ruleColumns.SingleOrDefault(column =>
-                column.Name.Equals(rule.Field, StringComparison.OrdinalIgnoreCase)
-            );
-            var targetField = fields.SingleOrDefault(field =>
-                field.Name.Equals(rule.Field, StringComparison.OrdinalIgnoreCase)
-            );
-            var managedDataTypeTarget = target != null && DataTypeColumn.Is(target.Name);
-            if (
-                target == null
-                || target.Generated
-                || target.AutoIncrement
-                || target.PrimaryKey
-                || target.Type.Contains("blob")
-                || target.Type is "binary" or "varbinary" or "geometry"
-                || !managedDataTypeTarget
-                    && (
-                        targetField == null
-                        || targetField.ReadOnly
-                        || targetField.Lookup != null
-                        || targetField.Widget is "join" or "formula" or "sumup"
-                    )
-            )
-                throw new ApiError(400, "Field set rules require an editable scalar stored target field or the managed datatype field.");
-            Formulas.Compile(rule.Condition, ruleColumns, fields);
-            Formulas.Compile(rule.Value, ruleColumns, fields);
-            var dependencies = Formulas.Dependencies(rule.Condition, ruleColumns, fields)
-                .Concat(Formulas.Dependencies(rule.Value, ruleColumns, fields));
-            if (dependencies.Any(name =>
-                ruleColumns.Any(column => column.Generated && column.Name.Equals(name, StringComparison.OrdinalIgnoreCase))))
-                throw new ApiError(400, "Field set rules cannot reference generated database columns.");
-        }
+            ValidateFieldSetRule(rule, ruleColumns, fields);
         using var validation = connection.CreateCommand();
         DatabaseService.ViewPredicate(validation, definition.View, columns);
         if (

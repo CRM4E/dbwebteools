@@ -251,3 +251,10 @@ public record JoinInput(
 );
 
 public record FormulaValidationInput(string? Formula, List<LayoutField>? Fields);
+
+public record FieldSetRuleValidationInput(
+    string? Field,
+    string? Condition,
+    string? Value,
+    List<LayoutField>? Fields
+);

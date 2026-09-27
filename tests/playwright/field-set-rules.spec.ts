@@ -37,8 +37,13 @@ test("configure a field set rule and apply it when saving a record", async ({ pa
   await page.getByRole("combobox", { name: "Table", exact: true }).selectOption("z_editor_records");
   await page.getByRole("button", { name: "Add set rule" }).click();
   await page.getByLabel("Set rule field").selectOption("status");
-  await page.getByLabel("Set rule condition formula").fill("[title] = 'Set rule browser'");
+  await page.getByLabel("Set rule condition formula").fill("[title] =");
   await page.getByLabel("Set rule value formula").fill("'published'");
+  await page.getByRole("button", { name: "Validate formulas" }).click();
+  await expect(page.getByRole("alert")).toContainText("Invalid formula syntax");
+  await page.getByLabel("Set rule condition formula").fill("[title] = 'Set rule browser'");
+  await page.getByRole("button", { name: "Validate formulas" }).click();
+  await expect(page.getByRole("status")).toContainText("Field set rule formulas are valid");
   await page.getByRole("button", { name: "Save set rule" }).click();
   await page.getByRole("button", { name: "Save object", exact: true }).click();
   await expect(page.getByText("Object saved. Application behavior updated.", { exact: true })).toBeVisible();

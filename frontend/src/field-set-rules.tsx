@@ -1,22 +1,37 @@
-import { useState } from "react";
-import type { FieldSetRule } from "./api";
+import { useRef, useState } from "react";
+import { api, type Field, type FieldSetRule } from "./api";
 
 type Candidate = { name: string; label: string };
 
 export function FieldSetRulesEditor({
   value,
   fields,
+  runtimeFields,
+  connection,
+  table,
   disabled,
   change,
 }: {
   value: FieldSetRule[];
   fields: Candidate[];
+  runtimeFields: Field[];
+  connection: number;
+  table: string;
   disabled?: boolean;
   change: (rules: FieldSetRule[]) => void;
 }) {
   const [draft, setDraft] = useState<(FieldSetRule & { index: number | null }) | null>(null);
+  const [feedback, setFeedback] = useState<{ message: string; valid: boolean } | null>(null);
+  const [validating, setValidating] = useState(false);
+  const validationRevision = useRef(0);
+  const updateDraft = (next: FieldSetRule & { index: number | null }) => {
+    validationRevision.current++;
+    setFeedback(null);
+    setValidating(false);
+    setDraft(next);
+  };
   const open = (rule?: FieldSetRule, index: number | null = null) =>
-    setDraft({
+    updateDraft({
       field: rule?.field || fields[0]?.name || "",
       condition: rule?.condition || "",
       value: rule?.value || "",
@@ -61,15 +76,34 @@ export function FieldSetRulesEditor({
       {draft && (
         <div className="inline-editor" role="dialog" aria-label={draft.index == null ? "Add field set rule" : "Edit field set rule"}>
           <div className="form-grid">
-            <label>Field to set<select aria-label="Set rule field" value={draft.field} disabled={disabled} onChange={(event) => setDraft({ ...draft, field: event.target.value })}>
+            <label>Field to set<select aria-label="Set rule field" value={draft.field} disabled={disabled} onChange={(event) => updateDraft({ ...draft, field: event.target.value })}>
               {fields.map((field) => <option key={field.name} value={field.name}>{field.label} · {field.name}</option>)}
             </select></label>
-            <label>Condition formula<textarea aria-label="Set rule condition formula" maxLength={1024} required value={draft.condition} disabled={disabled} onChange={(event) => setDraft({ ...draft, condition: event.target.value })} /></label>
-            <label>Value formula<textarea aria-label="Set rule value formula" maxLength={1024} required value={draft.value} disabled={disabled} onChange={(event) => setDraft({ ...draft, value: event.target.value })} /></label>
+            <label>Condition formula<textarea aria-label="Set rule condition formula" maxLength={1024} required value={draft.condition} disabled={disabled} onChange={(event) => updateDraft({ ...draft, condition: event.target.value })} /></label>
+            <label>Value formula<textarea aria-label="Set rule value formula" maxLength={1024} required value={draft.value} disabled={disabled} onChange={(event) => updateDraft({ ...draft, value: event.target.value })} /></label>
           </div>
           <p className="muted">Use stored fields as <code>[field_name]</code>. Conditions must return true or false; values use the same formula functions as calculated fields.</p>
+          {feedback && <p role={feedback.valid ? "status" : "alert"} className={feedback.valid ? "notice" : "alert"}>{feedback.message}</p>}
           <div className="form-actions">
-            <button type="button" disabled={disabled} onClick={() => setDraft(null)}>Cancel</button>
+            <button type="button" disabled={disabled || validating} onClick={() => setDraft(null)}>Cancel</button>
+            <button type="button" disabled={disabled || validating || !complete} onClick={async () => {
+              if (!complete) return;
+              const current = ++validationRevision.current;
+              setValidating(true);
+              setFeedback(null);
+              try {
+                const result = await api<{ message: string }>(
+                  "/admin/connections/" + connection + "/tables/" + encodeURIComponent(table) + "/field-set-rules/validate",
+                  "POST",
+                  { field: draft.field, condition: draft.condition, value: draft.value, fields: runtimeFields },
+                );
+                if (current === validationRevision.current) setFeedback({ message: result.message, valid: true });
+              } catch (error) {
+                if (current === validationRevision.current) setFeedback({ message: (error as Error).message, valid: false });
+              } finally {
+                if (current === validationRevision.current) setValidating(false);
+              }
+            }}>{validating ? "Validating…" : "Validate formulas"}</button>
             <button type="button" className="primary" disabled={disabled || !complete} onClick={() => {
               if (!complete) return;
               const rule = { field: draft.field, condition: draft.condition.trim(), value: draft.value.trim() };

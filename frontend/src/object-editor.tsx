@@ -1099,6 +1099,9 @@ export function ObjectEditor({
                 key={`${connection}:${table}`}
                 value={fieldSetRules}
                 fields={fieldSetCandidates}
+                runtimeFields={runtimeFields}
+                connection={connection}
+                table={table}
                 disabled={busy || objectLoading}
                 change={setFieldSetRules}
               />

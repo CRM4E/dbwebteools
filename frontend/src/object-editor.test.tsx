@@ -27,6 +27,8 @@ function mockApi(objectDefinition: unknown = definition) {
     if (url === "/connections/1/tables") return ["things"] as never;
     if (url.includes("/schema/tables/things")) return schema as never;
     if (url.endsWith("/tables/things/object") && method === "GET") return objectDefinition as never;
+    if (url.endsWith("/field-set-rules/validate") && method === "POST")
+      return { message: "Field set rule formulas are valid." } as never;
     return undefined as never;
   });
 }
@@ -51,6 +53,17 @@ describe("Object field workflow", () => {
     fireEvent.change(screen.getByLabelText("Set rule value formula"), {
       target: { value: "Upper([title])" },
     });
+    fireEvent.click(screen.getByRole("button", { name: "Validate formulas" }));
+    await screen.findByText("Field set rule formulas are valid.");
+    expect(api).toHaveBeenCalledWith(
+      "/admin/connections/1/tables/things/field-set-rules/validate",
+      "POST",
+      expect.objectContaining({
+        field: "title",
+        condition: "Length([title]) > 3",
+        value: "Upper([title])",
+      }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Save set rule" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Add set rule" }));
