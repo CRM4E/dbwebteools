@@ -367,7 +367,8 @@ public partial class DatabaseService(IDataProtectionProvider protection)
         List<LayoutField>? fields = null,
         Func<MySqlTransaction, Task>? prepare = null,
         List<SumupPlan>? sumups = null,
-        List<FieldSetRule>? fieldSetRules = null
+        List<FieldSetRule>? fieldSetRules = null,
+        List<string>? dataTypeKeys = null
     )
     {
         if (input.Values == null)
@@ -462,7 +463,24 @@ public partial class DatabaseService(IDataProtectionProvider protection)
                 cols,
                 current,
                 input.Values,
-                (value, column) => _ = Value(value, column)
+                (value, column) =>
+                {
+                    _ = Value(value, column);
+                    if (
+                        DataTypeColumn.Is(column.Name)
+                        && (
+                            value.ValueKind != JsonValueKind.String
+                            || dataTypeKeys?.Contains(
+                                value.GetString()!,
+                                StringComparer.Ordinal
+                            ) != true
+                        )
+                    )
+                        throw new ApiError(
+                            400,
+                            "Field set rule for datatype must return a configured data type key."
+                        );
+                }
             );
             LayoutRules.ValidateDropdownValues(fields ?? [], input.Values);
             LayoutRules.ValidateEmailValues(fields ?? [], input.Values);

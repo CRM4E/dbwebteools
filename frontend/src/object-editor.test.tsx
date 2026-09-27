@@ -54,6 +54,8 @@ describe("Object field workflow", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save set rule" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Add set rule" }));
+    expect(Array.from((screen.getByLabelText("Set rule field") as HTMLSelectElement).options)
+      .map((option) => option.value)).toContain("datatype");
     expect((screen.getByRole("button", { name: "Save set rule" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText("Set rule condition formula"), {
       target: { value: "true" },

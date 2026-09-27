@@ -171,6 +171,22 @@ public static class ObjectConfigurationRules
         ValidatePresentation(definition, presentation);
         var fields = ObjectModel.Merge(definition, presentation).Fields;
         var columns = await service.Columns(connection, table);
+        var ruleColumns = columns.Any(column => DataTypeColumn.Is(column.Name))
+            ? columns
+            :
+            [
+                .. columns,
+                new ColumnInfo(
+                    DataTypeColumn.Name,
+                    "varchar",
+                    false,
+                    false,
+                    false,
+                    false,
+                    definition.DefaultDataTypeKey,
+                    64
+                ),
+            ];
         var fieldSetRules = definition.FieldSetRules ?? [];
         if (fieldSetRules.Count > 50 || fieldSetRules.Any(rule => rule == null))
             throw new ApiError(400, "Define at most 50 field set rules.");
@@ -182,32 +198,35 @@ public static class ObjectConfigurationRules
                 || string.IsNullOrWhiteSpace(rule.Value)
             )
                 throw new ApiError(400, "Every field set rule needs a field, condition, and value formula.");
-            var target = columns.SingleOrDefault(column =>
+            var target = ruleColumns.SingleOrDefault(column =>
                 column.Name.Equals(rule.Field, StringComparison.OrdinalIgnoreCase)
             );
             var targetField = fields.SingleOrDefault(field =>
                 field.Name.Equals(rule.Field, StringComparison.OrdinalIgnoreCase)
             );
+            var managedDataTypeTarget = target != null && DataTypeColumn.Is(target.Name);
             if (
                 target == null
-                || targetField == null
                 || target.Generated
                 || target.AutoIncrement
                 || target.PrimaryKey
-                || DataTypeColumn.Is(target.Name)
-                || targetField.ReadOnly
-                || targetField.Lookup != null
-                || targetField.Widget is "join" or "formula" or "sumup"
                 || target.Type.Contains("blob")
                 || target.Type is "binary" or "varbinary" or "geometry"
+                || !managedDataTypeTarget
+                    && (
+                        targetField == null
+                        || targetField.ReadOnly
+                        || targetField.Lookup != null
+                        || targetField.Widget is "join" or "formula" or "sumup"
+                    )
             )
-                throw new ApiError(400, "Field set rules require an editable scalar stored target field.");
-            Formulas.Compile(rule.Condition, columns, fields);
-            Formulas.Compile(rule.Value, columns, fields);
-            var dependencies = Formulas.Dependencies(rule.Condition, columns, fields)
-                .Concat(Formulas.Dependencies(rule.Value, columns, fields));
+                throw new ApiError(400, "Field set rules require an editable scalar stored target field or the managed datatype field.");
+            Formulas.Compile(rule.Condition, ruleColumns, fields);
+            Formulas.Compile(rule.Value, ruleColumns, fields);
+            var dependencies = Formulas.Dependencies(rule.Condition, ruleColumns, fields)
+                .Concat(Formulas.Dependencies(rule.Value, ruleColumns, fields));
             if (dependencies.Any(name =>
-                columns.Any(column => column.Generated && column.Name.Equals(name, StringComparison.OrdinalIgnoreCase))))
+                ruleColumns.Any(column => column.Generated && column.Name.Equals(name, StringComparison.OrdinalIgnoreCase))))
                 throw new ApiError(400, "Field set rules cannot reference generated database columns.");
         }
         using var validation = connection.CreateCommand();
