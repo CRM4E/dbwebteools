@@ -308,8 +308,8 @@ export function ObjectEditor({
     showInList: true,
     listOrder: index,
   }));
-  const fieldSetCandidates = objectFields
-    .filter((field) => {
+  const fieldSetCandidates = [
+    ...objectFields.filter((field) => {
       const column = schema?.columns.find((candidate) => candidate.name === field.name);
       return !!column
         && !column.generated
@@ -317,12 +317,12 @@ export function ObjectEditor({
         && !column.primaryKey
         && !field.readOnly
         && !field.lookup
-        && field.name !== "datatype"
         && !column.type.toLowerCase().includes("blob")
         && !["binary", "varbinary", "geometry"].includes(column.type.toLowerCase())
         && !["join", "formula", "sumup"].includes(field.widget);
-    })
-    .map((field) => ({ name: field.name, label: field.label || field.name }));
+    }).map((field) => ({ name: field.name, label: field.label || field.name })),
+    ...(dataTypes.length > 0 ? [{ name: "datatype", label: "Data type" }] : []),
+  ];
   const patchField = (patch: Partial<ObjectField>) =>
     setFieldDraft((old) => (old ? { ...old, ...patch } : old));
   const databaseType = (widget: string) =>

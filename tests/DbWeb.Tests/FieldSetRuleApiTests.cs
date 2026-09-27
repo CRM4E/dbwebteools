@@ -11,6 +11,86 @@ namespace DbWeb.Tests;
 public partial class ApiTests
 {
     [Fact]
+    public async Task FieldSetRulesCanAssignConfiguredManagedDataTypes()
+    {
+        var cs = Environment.GetEnvironmentVariable("MARIADB_TEST_CONNECTION");
+        if (string.IsNullOrEmpty(cs))
+        {
+            Assert.False(Environment.GetEnvironmentVariable("CI") == "true");
+            return;
+        }
+        await using var connection = new MySqlConnection(cs);
+        await connection.OpenAsync();
+        var table = "set_datatype_" + Guid.NewGuid().ToString("N");
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"CREATE TABLE \u0060{table}\u0060 (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(100))";
+        await command.ExecuteNonQueryAsync();
+        try
+        {
+            using var factory = new Factory();
+            using var admin = factory.CreateClient();
+            await Login(admin);
+            var builder = new MySqlConnectionStringBuilder(cs);
+            var response = await admin.PostAsJsonAsync(
+                "/api/admin/connections",
+                new ConnectionInput("Set datatype rules", builder.Server, builder.Port, builder.Database, builder.UserID, builder.Password, false)
+            );
+            response.EnsureSuccessStatusCode();
+            var id = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+            var objectPath = $"/api/admin/connections/{id}/tables/{table}/object";
+            var apiPath = $"/api/connections/{id}/tables/{table}";
+            var definition = (await admin.GetFromJsonAsync<ObjectDefinition>(objectPath))!;
+            var premium = new ObjectDataType(
+                "premium",
+                "Premium",
+                definition.DataTypes![0].Fields.Select(field => field with { }).ToList()
+            );
+            var configured = definition with
+            {
+                DataTypes = [.. definition.DataTypes, premium],
+                FieldSetRules = [new("datatype", "[title] = 'premium'", "'premium'")],
+            };
+
+            // The same save can provision the managed column and define a rule for it.
+            (await admin.PutAsJsonAsync(objectPath, configured)).EnsureSuccessStatusCode();
+            (await admin.PostAsJsonAsync(apiPath + "/create", new { values = new { title = "premium" } })).EnsureSuccessStatusCode();
+            (await admin.PostAsJsonAsync(apiPath + "/create", new { values = new { title = "standard" } })).EnsureSuccessStatusCode();
+            command.CommandText = $"SELECT GROUP_CONCAT(datatype ORDER BY id) FROM \u0060{table}\u0060";
+            Assert.Equal("premium,default", await command.ExecuteScalarAsync());
+
+            var rows = (await admin.GetFromJsonAsync<JsonElement>(apiPath + "/records")).GetProperty("rows");
+            var standard = rows.EnumerateArray().Single(row =>
+                row.GetProperty("values").GetProperty("title").GetString() == "standard"
+            );
+            (await admin.PostAsJsonAsync(apiPath + "/update", new
+            {
+                values = new { title = "premium" },
+                key = new { id = 2 },
+                version = standard.GetProperty("version").GetString(),
+            })).EnsureSuccessStatusCode();
+            command.CommandText = $"SELECT datatype FROM \u0060{table}\u0060 WHERE id=2";
+            Assert.Equal("premium", await command.ExecuteScalarAsync());
+
+            var invalidResult = configured with
+            {
+                FieldSetRules = [new("datatype", "true", "'missing'")],
+            };
+            (await admin.PutAsJsonAsync(objectPath, invalidResult)).EnsureSuccessStatusCode();
+            Assert.Equal(
+                HttpStatusCode.BadRequest,
+                (await admin.PostAsJsonAsync(apiPath + "/create", new { values = new { title = "invalid" } })).StatusCode
+            );
+            command.CommandText = $"SELECT COUNT(*) FROM \u0060{table}\u0060";
+            Assert.Equal(2L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+        }
+        finally
+        {
+            command.CommandText = $"DROP TABLE IF EXISTS \u0060{table}\u0060";
+            await command.ExecuteNonQueryAsync();
+        }
+    }
+
+    [Fact]
     public async Task FieldSetRulesPersistAndRunForCreatesAndPartialUpdates()
     {
         var cs = Environment.GetEnvironmentVariable("MARIADB_TEST_CONNECTION");

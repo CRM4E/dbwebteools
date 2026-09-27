@@ -1489,7 +1489,8 @@ foreach (var operation in new[] { "create", "update", "delete" })
                 op,
                 validated.Fields,
                 sumups: plans,
-                fieldSetRules: validated.FieldSetRules
+                fieldSetRules: validated.FieldSetRules,
+                dataTypeKeys: validated.DataTypeKeys
             );
             db.Audit.Add(
                 new()

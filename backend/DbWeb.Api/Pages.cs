@@ -772,7 +772,8 @@ public static class PageEndpoints
                             );
                         },
                         plans,
-                        validated.FieldSetRules
+                        validated.FieldSetRules,
+                        validated.DataTypeKeys
                     );
                     db.Audit.Add(
                         new()
@@ -933,7 +934,8 @@ public static class PageEndpoints
                             values[field.Name] = await ParentKey(tx);
                         },
                         sumups: plans,
-                        fieldSetRules: validated.FieldSetRules
+                        fieldSetRules: validated.FieldSetRules,
+                        dataTypeKeys: validated.DataTypeKeys
                     );
                     db.Audit.Add(
                         new()

@@ -7,7 +7,8 @@ namespace DbWeb.Api;
 
 public record ValidatedRecordWrite(
     List<LayoutField> Fields,
-    List<FieldSetRule> FieldSetRules
+    List<FieldSetRule> FieldSetRules,
+    List<string> DataTypeKeys
 );
 
 public static class RecordWrites
@@ -59,6 +60,7 @@ public static class RecordWrites
     {
         List<LayoutField> fields = [];
         List<FieldSetRule> fieldSetRules = [];
+        List<string> dataTypeKeys = [];
         if (op != "delete" && input.Values != null)
         {
             var layout = await db.Layouts.SingleOrDefaultAsync(x =>
@@ -67,6 +69,7 @@ public static class RecordWrites
             var stored = ObjectModel.Stored(layout?.FieldsJson);
             fields = ObjectModel.Merge(stored).Fields;
             fieldSetRules = stored.Object.FieldSetRules ?? [];
+            dataTypeKeys = stored.Object.DataTypes!.Select(type => type.Key).ToList();
             var columns = await s.Columns(c, table);
             var hasManagedDataType = columns.Any(column => DataTypeColumn.Is(column.Name));
             if (
@@ -126,6 +129,6 @@ public static class RecordWrites
             }
         }
 
-        return new(fields, fieldSetRules);
+        return new(fields, fieldSetRules, dataTypeKeys);
     }
 }
