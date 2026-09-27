@@ -1427,7 +1427,27 @@ input[aria-readonly="true"] {
   padding-top: 1.5rem;
   border-top: 1px solid #d8e1da;
 }
-.data-type-layout { display: grid; gap: 1.25rem; }
+.data-type-layout {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.data-types,
+.data-type-layout > *,
+.data-types .table-scroll {
+  min-width: 0;
+  max-width: 100%;
+}
+.data-types .table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-inline: contain;
+}
 .data-type-fields {
   padding: 1rem;
   border: 1px solid #d8e1da;
