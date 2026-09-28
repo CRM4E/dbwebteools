@@ -63,8 +63,15 @@ test("configure a field set rule and apply it when saving a record", async ({ pa
   await page.getByLabel("Set rule field").selectOption("status");
   await page.getByLabel("Set rule condition formula").fill("[title] =");
   await page.getByLabel("Set rule value formula").fill("'published'");
+  const ruleDialog = page.getByRole("dialog", { name: "Add field set rule" });
+  const rejectedSave = page.waitForResponse((response) =>
+    response.request().method() === "PUT" && response.url().endsWith("/tables/z_editor_records/object"));
+  await page.getByRole("button", { name: "Save set rule" }).click();
+  expect((await rejectedSave).status()).toBe(400);
+  await expect(ruleDialog).toBeVisible();
+  await expect(ruleDialog.getByRole("alert")).toContainText("Invalid formula syntax");
   await page.getByRole("button", { name: "Validate formulas" }).click();
-  await expect(page.getByRole("alert")).toContainText("Invalid formula syntax");
+  await expect(ruleDialog.getByRole("alert")).toContainText("Invalid formula syntax");
   await page.getByLabel("Set rule condition formula").fill("[title] = 'Set rule browser'");
   await page.getByRole("button", { name: "Validate formulas" }).click();
   await expect(page.getByRole("status")).toContainText("Field set rule formulas are valid");
