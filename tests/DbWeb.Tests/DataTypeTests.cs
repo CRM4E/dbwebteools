@@ -468,7 +468,8 @@ public partial class ApiTests
             })).EnsureSuccessStatusCode();
             command.CommandText = $"SELECT datatype FROM `{table}` WHERE title='Secondary row'";
             Assert.Equal("secondary", (string?)await command.ExecuteScalarAsync());
-            command.CommandText = $"SELECT datatype FROM `{table}` WHERE title='Existing'";
+            command.CommandText =
+                $"SELECT datatype FROM `{table}` WHERE title='Before provisioning'";
             Assert.Equal("primary", (string?)await command.ExecuteScalarAsync());
 
             var removeUsed = current with
