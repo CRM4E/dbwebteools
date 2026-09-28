@@ -72,11 +72,8 @@ it("requests formula recalculation with only fields changed since the last resul
         greeting,
       ]}
       fields={[total.field, greeting.field]}
-      row={{
-        values: { price: "2", qty: "1", name: "A", notes: "before" },
-        joinedValues: { total: "4", greeting: "Initial" },
-        version: "v1",
-      }}
+      row={null}
+      initialValues={{ price: "2", qty: "1", name: "A", notes: "before" }}
       close={() => {}}
       save={async () => {}}
     />,
@@ -102,4 +99,76 @@ it("requests formula recalculation with only fields changed since the last resul
   expect((screen.getByLabelText("greeting") as HTMLInputElement).value).toBe(
     "Initial",
   );
+});
+
+it("preserves an edit row's formula projection until a dependency changes", async () => {
+  mocks.api
+    .mockResolvedValueOnce({
+      values: {},
+      columns: [{ name: "typed_total" }],
+      calculationErrors: { typed_total: "Cannot calculate" },
+    })
+    .mockResolvedValueOnce({
+      values: { typed_total: "Premium: 8" },
+      columns: [{ name: "typed_total" }],
+      calculationErrors: {},
+    });
+
+  const price = {
+    name: "price",
+    type: "decimal",
+    nullable: true,
+    primaryKey: false,
+    generated: false,
+    autoIncrement: false,
+    default: null,
+  };
+  const typedTotal = {
+    ...price,
+    name: "typed_total",
+    type: "varchar",
+    generated: true,
+    canWrite: false,
+    field: {
+      name: "typed_total",
+      label: "Typed total",
+      section: "",
+      order: 10,
+      hidden: false,
+      readOnly: true,
+      widget: "formula",
+      formula: "Concat([__dbweb_data_type], ': ', [price] * 2)",
+    },
+  };
+
+  render(
+    <RecordEditor
+      base="/connections/1/tables/items"
+      columns={[price, typedTotal]}
+      fields={[typedTotal.field]}
+      row={{
+        // The managed datatype is deliberately absent from editor-visible values.
+        values: { price: "2" },
+        joinedValues: { typed_total: "Premium: 4" },
+        version: "v1",
+      }}
+      close={() => {}}
+      save={async () => {}}
+    />,
+  );
+
+  expect((screen.getByLabelText("Typed total") as HTMLInputElement).value).toBe(
+    "Premium: 4",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  expect(mocks.api).not.toHaveBeenCalled();
+
+  fireEvent.change(screen.getByLabelText("price"), { target: { value: "3" } });
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledTimes(1));
+  expect(mocks.api.mock.calls[0][2].changedFields).toEqual(["price"]);
+  await screen.findByDisplayValue("Calculation error: Cannot calculate");
+
+  fireEvent.change(screen.getByLabelText("price"), { target: { value: "4" } });
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledTimes(2));
+  await screen.findByDisplayValue("Premium: 8");
 });

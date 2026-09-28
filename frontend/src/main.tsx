@@ -850,7 +850,6 @@ export function RecordEditor({
   const [copiedLookups, setCopiedLookups] = useState<string[]>([]);
   const [joinBusy, setJoinBusy] = useState(false),
     [joinError, setJoinError] = useState("");
-  const resolvedJoinRequest = useRef<string | null>(null);
   const joinConfig = JSON.stringify(
     fields.filter(
       (f) => (f.widget === "join" && f.join) || f.widget === "formula",
@@ -870,6 +869,11 @@ export function RecordEditor({
         .map((c) => [c.name, values[c.name] ?? null]),
     ),
   );
+  // Existing rows already carry the authoritative joined/formula projection from
+  // the list response. Treat their stored values as the resolved baseline so
+  // opening the editor does not replace that projection with a preview made from
+  // client-visible values (which intentionally omit backend-managed fields).
+  const resolvedJoinRequest = useRef<string | null>(row ? joinRequest : null);
   useEffect(() => {
     let active = true;
     if (joinConfig === "[]" || !base) return;
