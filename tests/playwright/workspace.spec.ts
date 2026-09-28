@@ -775,11 +775,10 @@ test("list columns and read-only joins refresh when a lookup changes", async ({
   await page.getByRole("button", { name: "Save layout", exact: true }).click();
   await expect(page.getByText("Layout saved.", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Data browser" }).click();
-  await expect(
-    page.getByText(
-      "No visible list fields. Check the layout and field permissions.",
-    ),
-  ).toBeVisible();
+  await expect(page.getByRole("columnheader")).toHaveText([
+    "Data type",
+    "Actions",
+  ]);
 });
 
 test("data type rules block invalid creates and updates", async ({
