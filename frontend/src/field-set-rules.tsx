@@ -98,7 +98,14 @@ export function FieldSetRulesEditor({
             </select></label>}
             <label>Value formula<textarea aria-label="Set rule value formula" maxLength={1024} required value={draft.value} disabled={disabled} onChange={(event) => updateDraft({ ...draft, value: event.target.value })} /></label>
           </div>
-          <p className="muted">Use stored fields as <code>[field_name]</code>. Conditions must return true or false; values use the same formula functions as calculated fields.</p>
+          <div className="muted formula-help" aria-label="Field set rule formula help">
+            <p>Reference stored fields as <code>[field_name]</code>. Condition formulas must return true or false. Value formulas must produce a value accepted by the selected field.</p>
+            <p><strong>Operators:</strong> <code>+ - * / %</code>, comparisons, and Boolean expressions.</p>
+            <p><strong>Text:</strong> <code>Concat(values...)</code>, <code>Upper(text)</code>, <code>Lower(text)</code>, <code>Trim(text)</code>, <code>Length(text)</code>, <code>Substring(text, start, length)</code>, and <code>Replace(text, from, to)</code>.</p>
+            <p><strong>Choice and fallback:</strong> <code>Coalesce(value, fallback, ...)</code>, <code>DropdownDisplay('field_name', key)</code>, and <code>if(condition, yes, no)</code>.</p>
+            <p><strong>Numbers:</strong> <code>Round(value, places)</code>, <code>Abs(value)</code>, <code>Floor(value)</code>, <code>Ceiling(value)</code>, <code>Min(a, b)</code>, and <code>Max(a, b)</code>.</p>
+            <p>Function names are case-sensitive, substring indexes start at zero, and <code>DropdownDisplay</code> uses a stored dropdown field name—not its label.</p>
+          </div>
           {feedback && <p role={feedback.valid ? "status" : "alert"} className={feedback.valid ? "notice" : "alert"}>{feedback.message}</p>}
           <div className="form-actions">
             <button type="button" disabled={disabled || validating || saving} onClick={() => setDraft(null)}>Cancel</button>
