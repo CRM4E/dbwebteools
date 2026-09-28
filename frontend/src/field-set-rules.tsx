@@ -58,9 +58,6 @@ export function FieldSetRulesEditor({
             Later rules can use values set by earlier rules.
           </p>
         </div>
-        <button type="button" disabled={disabled || value.length >= 50 || fields.length === 0} onClick={() => open()}>
-          Add set rule
-        </button>
       </div>
       <div className="table-scroll">
         <table>
@@ -82,6 +79,11 @@ export function FieldSetRulesEditor({
             ))}
           </tbody>
         </table>
+      </div>
+      <div className="actions field-set-rule-actions">
+        <button type="button" disabled={disabled || value.length >= 50 || fields.length === 0} onClick={() => open()}>
+          Add set rule
+        </button>
       </div>
       {draft && (
         <div className="inline-editor" role="dialog" aria-label={draft.index == null ? "Add field set rule" : "Edit field set rule"}>
