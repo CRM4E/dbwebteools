@@ -35,6 +35,9 @@ test("configure a field set rule and apply it when saving a record", async ({ pa
   await page.getByRole("button", { name: "Object editor" }).click();
   await page.getByRole("combobox", { name: "Connection", exact: true }).selectOption(String(id));
   await page.getByRole("combobox", { name: "Table", exact: true }).selectOption("z_editor_records");
+  await expect(page.getByRole("region", { name: "Field set rules" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add field" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add set rule" })).toBeVisible();
   const layoutOrder = await page.evaluate(() => {
     const rules = document.querySelector('section[aria-label="Field set rules"]');
     const rulesTable = rules?.querySelector("table");
