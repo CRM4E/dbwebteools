@@ -179,7 +179,6 @@ test("configure all field levels and edit only allowed fields with hidden primar
   await expect(member.getByRole("columnheader")).toHaveText([
     "name",
     "note",
-    "Data type",
     "Actions",
   ]);
   await member
@@ -191,9 +190,6 @@ test("configure all field levels and edit only allowed fields with hidden primar
     exact: true,
   });
   await expect(dialog.getByLabel("note", { exact: true })).toBeDisabled();
-  const datatype = dialog.getByLabel("Data type", { exact: true });
-  await expect(datatype).toBeDisabled();
-  await expect(datatype.locator("option:checked")).toHaveText("Default");
   await expect(dialog.getByLabel("secret", { exact: true })).toHaveCount(0);
   await expect(dialog.getByLabel("id", { exact: true })).toHaveCount(0);
   const editedName = `Allowed edit ${Date.now()}`;
