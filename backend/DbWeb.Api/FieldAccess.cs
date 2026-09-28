@@ -34,7 +34,9 @@ public sealed class FieldAccess(Dictionary<string, string>? levels)
         || levels.GetValueOrDefault(name) is "read" or "write";
 
     public bool Write(string name) =>
-        !DataTypeColumn.Is(name) && (levels == null || levels.GetValueOrDefault(name) == "write");
+        DataTypeColumn.Is(name)
+        || levels == null
+        || levels.GetValueOrDefault(name) == "write";
 
     public void RequireRead(IEnumerable<string> names)
     {
@@ -320,7 +322,8 @@ public sealed class FieldAccess(Dictionary<string, string>? levels)
     {
         var keys = result.Columns.Where(c => c.PrimaryKey).Select(c => c.Name).ToList();
         result.HasPrimaryKey = keys.Count > 0;
-        // The backend-managed datatype is public record metadata, but never writable.
+        // The managed datatype is public record metadata and does not participate in
+        // per-field restrictions. Table create/update permission still gates writes.
         // Its presence alone must not make an otherwise unrestricted row use protected
         // record keys and versions. Actual field restrictions still do.
         var restricted =

@@ -35,7 +35,7 @@ describe("Record editor", () => {
     ["add", null, { datatype: "invoice" }],
     ["edit", { values: { datatype: "invoice", name: "Original" }, version: "v1" }, {}],
   ])(
-    "shows friendly read-only datatype in the %s form and never submits it",
+    "shows friendly editable datatype in the %s form and submits changes",
     async (_mode, row, initialValues) => {
       const save = vi.fn().mockResolvedValue(undefined);
       render(
@@ -50,7 +50,7 @@ describe("Record editor", () => {
               generated: false,
               autoIncrement: false,
               default: null,
-              canWrite: false,
+              canWrite: true,
             },
           ]}
           fields={[
@@ -60,7 +60,7 @@ describe("Record editor", () => {
               section: "",
               order: 99,
               hidden: false,
-              readOnly: true,
+              readOnly: false,
               widget: "dropdown",
               options: [
                 { key: "invoice", display: "Customer invoice" },
@@ -76,13 +76,19 @@ describe("Record editor", () => {
       );
 
       const datatype = screen.getByLabelText("Data type") as HTMLSelectElement;
-      expect(datatype.disabled).toBe(true);
+      expect(datatype.disabled).toBe(false);
       expect(datatype.selectedOptions[0].textContent).toBe("Customer invoice");
+      fireEvent.change(datatype, { target: { value: "credit" } });
       fireEvent.change(screen.getByLabelText("name"), {
         target: { value: "Changed" },
       });
       fireEvent.click(screen.getByText("Save record"));
-      await waitFor(() => expect(save).toHaveBeenCalledWith({ name: "Changed" }));
+      await waitFor(() =>
+        expect(save).toHaveBeenCalledWith({
+          datatype: "credit",
+          name: "Changed",
+        }),
+      );
     },
   );
 

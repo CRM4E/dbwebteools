@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MySqlConnector;
 
 namespace DbWeb.Api;
@@ -13,7 +14,7 @@ public static class DataTypeColumn
             "",
             int.MaxValue,
             false,
-            true,
+            false,
             "dropdown",
             Options: definition.DataTypes!
                 .Select(type => new DropdownOption(type.Key, type.Label))
@@ -24,6 +25,15 @@ public static class DataTypeColumn
 
     public static bool Is(string? name) =>
         name != null && name.Equals(Name, StringComparison.OrdinalIgnoreCase);
+
+    public static void ValidateValue(JsonElement value, IEnumerable<string> allowedKeys)
+    {
+        if (
+            value.ValueKind != JsonValueKind.String
+            || !allowedKeys.Contains(value.GetString()!, StringComparer.Ordinal)
+        )
+            throw new ApiError(400, "Data type must be one of the configured values.");
+    }
 
     public static async Task ValidateExisting(
         MySqlConnection connection,

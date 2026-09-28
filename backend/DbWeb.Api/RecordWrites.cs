@@ -82,9 +82,9 @@ public static class RecordWrites
                 DataTypeColumn.RequireReady(columns);
             if (hasManagedDataType)
             {
-                if (input.Values.Keys.Any(DataTypeColumn.Is))
-                    throw new ApiError(400, "datatype is managed by the backend and cannot be edited.");
-                if (op == "create")
+                if (input.Values.TryGetValue(DataTypeColumn.Name, out var requestedDataType))
+                    DataTypeColumn.ValidateValue(requestedDataType, dataTypeKeys);
+                else if (op == "create")
                     input.Values[DataTypeColumn.Name] = JsonSerializer.SerializeToElement(
                         stored.Object.DefaultDataTypeKey!
                     );

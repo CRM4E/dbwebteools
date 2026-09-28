@@ -50,21 +50,21 @@ public partial class ApiTests
     }
 
     [Fact]
-    public void ManagedDatatypeIsAlwaysReadableButNeverWritable()
+    public void ManagedDatatypeIsAlwaysReadableAndWritableWithTableMutationAccess()
     {
         Assert.True(new FieldAccess(null).Read("datatype"));
-        Assert.False(new FieldAccess(null).Write("datatype"));
+        Assert.True(new FieldAccess(null).Write("datatype"));
         Assert.True(
             new FieldAccess(new()
             {
                 ["datatype"] = "none"
             }).Read("datatype")
         );
-        Assert.False(new FieldAccess(new() { ["datatype"] = "write" }).Write("datatype"));
+        Assert.True(new FieldAccess(new() { ["datatype"] = "none" }).Write("datatype"));
     }
 
     [Fact]
-    public void ManagedDatatypePresentationUsesConfiguredFriendlyLabelsAndIsReadOnly()
+    public void ManagedDatatypePresentationUsesConfiguredFriendlyLabelsAndIsEditable()
     {
         var field = DataTypeColumn.Presentation(
             new ObjectDefinition(
@@ -79,7 +79,7 @@ public partial class ApiTests
         );
 
         Assert.Equal("Data type", field.Label);
-        Assert.True(field.ReadOnly);
+        Assert.False(field.ReadOnly);
         Assert.False(field.Hidden);
         Assert.True(field.ShowInList);
         Assert.Equal("dropdown", field.Widget);
@@ -307,18 +307,11 @@ public partial class ApiTests
             Assert.Equal("primary", (string?)await command.ExecuteScalarAsync());
 
             Assert.Equal(
-                HttpStatusCode.Forbidden,
+                HttpStatusCode.BadRequest,
                 (
                     await admin.PostAsJsonAsync(
                         apiRoot + "/create",
-                        new
-                        {
-                            values = new
-                            {
-                                title = "Bad",
-                                datatype = "other"
-                            }
-                        }
+                        new { values = new { title = "Bad", datatype = "other" } }
                     )
                 ).StatusCode
             );
@@ -344,26 +337,20 @@ public partial class ApiTests
             var datatypeField = settings.GetProperty("fields")
                 .EnumerateArray()
                 .Single(field => field.GetProperty("name").GetString() == "datatype");
-            Assert.True(datatypeField.GetProperty("readOnly").GetBoolean());
+            Assert.False(datatypeField.GetProperty("readOnly").GetBoolean());
             Assert.Equal(
                 "Primary label",
                 datatypeField.GetProperty("options")[0].GetProperty("display").GetString()
             );
             Assert.Equal(
-                HttpStatusCode.Forbidden,
+                HttpStatusCode.BadRequest,
                 (
                     await admin.PostAsJsonAsync(
                         apiRoot + "/update",
                         new
                         {
-                            values = new
-                            {
-                                datatype = "other"
-                            },
-                            key = new
-                            {
-                                id = row.GetProperty("values").GetProperty("id").GetInt32()
-                            },
+                            values = new { datatype = "other" },
+                            key = new { id = row.GetProperty("values").GetProperty("id").GetInt32() },
                             version = row.GetProperty("version").GetString(),
                         }
                     )
@@ -382,6 +369,20 @@ public partial class ApiTests
                 DefaultDataTypeKey = "secondary",
             };
             (await admin.PutAsJsonAsync(adminRoot + "/object", current)).EnsureSuccessStatusCode();
+            page = await admin.GetFromJsonAsync<JsonElement>(apiRoot + "/records?sort=id");
+            row = page.GetProperty("rows")[1];
+            (await admin.PostAsJsonAsync(
+                apiRoot + "/update",
+                new
+                {
+                    values = new { datatype = "secondary" },
+                    key = new { id = row.GetProperty("values").GetProperty("id").GetInt32() },
+                    version = row.GetProperty("version").GetString(),
+                }
+            )).EnsureSuccessStatusCode();
+            command.CommandText = $"SELECT datatype FROM `{table}` WHERE id="
+                + row.GetProperty("values").GetProperty("id").GetInt32();
+            Assert.Equal("secondary", (string?)await command.ExecuteScalarAsync());
             (await admin.PostAsJsonAsync(apiRoot + "/create", new
             {
                 values = new
