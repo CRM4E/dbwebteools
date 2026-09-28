@@ -80,8 +80,14 @@ describe("Object field workflow", () => {
     expect(screen.getByText("Field set rule saved.")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Add set rule" }));
+    const help = screen.getByLabelText("Field set rule formula help");
+    for (const name of ["Concat", "Upper", "Lower", "Trim", "Length", "Substring", "Replace", "Coalesce", "DropdownDisplay", "Round", "Abs", "Floor", "Ceiling", "Min", "Max", "if"]) {
+      expect(help.textContent).toContain(name);
+    }
+    expect(help.textContent).toContain("Condition formulas");
+    expect(help.textContent).toContain("Value formulas");
     expect(Array.from((screen.getByLabelText("Set rule field") as HTMLSelectElement).options)
-      .map((option) => option.value)).toContain("datatype");
+      .map((option) => option.value)).not.toContain("datatype");
     expect((screen.getByRole("button", { name: "Save set rule" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText("Set rule condition formula"), {
       target: { value: "true" },
@@ -93,7 +99,6 @@ describe("Object field workflow", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add field set rule" })).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "Move set rule 2 up" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete set rule 2" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save object" }));
 
     await waitFor(() => expect(api).toHaveBeenCalledWith(
       "/admin/connections/1/tables/things/object",
@@ -126,9 +131,12 @@ describe("Object field workflow", () => {
     expect(screen.getByRole("dialog", { name: "Add field set rule" })).toBeTruthy();
   });
 
-  it("selects a datatype by label and stores its key as a rule formula", async () => {
+  it("preserves legacy datatype rules without offering datatype for new rules", async () => {
     mockApi({
       ...definition,
+      fieldSetRules: [
+        { field: "datatype", condition: "true", value: "'premium'" },
+      ],
       dataTypes: [
         { key: "default", label: "Standard customer", fields: [] },
         { key: "premium", label: "Premium customer", fields: [] },
@@ -138,16 +146,16 @@ describe("Object field workflow", () => {
     render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
     await screen.findByText("varchar(100)");
 
-    fireEvent.click(screen.getByRole("button", { name: "Add set rule" }));
-    fireEvent.change(screen.getByLabelText("Set rule field"), { target: { value: "datatype" } });
-    const select = screen.getByLabelText("Set rule data type") as HTMLSelectElement;
-    expect(Array.from(select.options).map((option) => [option.value, option.text])).toEqual([
-      ["", "Select data type"],
-      ["default", "Standard customer"],
-      ["premium", "Premium customer"],
-    ]);
-    fireEvent.change(select, { target: { value: "premium" } });
+    expect(screen.getByRole("region", { name: "Field set rules" }).textContent).toContain("Data type");
+    fireEvent.click(screen.getByRole("button", { name: "Edit set rule 1" }));
+    const select = screen.getByLabelText("Set rule field") as HTMLSelectElement;
+    expect(select.value).toBe("datatype");
+    expect(screen.queryByLabelText("Set rule data type")).toBeNull();
     expect((screen.getByLabelText("Set rule value formula") as HTMLTextAreaElement).value).toBe("'premium'");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add set rule" }));
+    expect(Array.from((screen.getByLabelText("Set rule field") as HTMLSelectElement).options)
+      .map((option) => option.value)).not.toContain("datatype");
   });
 
   it("places object actions above field set rules and the add-rule action below its table", async () => {
@@ -156,6 +164,8 @@ describe("Object field workflow", () => {
     await screen.findByText("varchar(100)");
 
     const rules = screen.getByRole("region", { name: "Field set rules" });
+    expect(screen.getByRole("heading", { name: "Field set rules", level: 2 })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add set rule" }).classList.contains("primary")).toBe(true);
     for (const name of ["Add field", "Add joined field", "Add formula field", "Save object"]) {
       const action = screen.getByRole("button", { name });
       expect(action.compareDocumentPosition(rules) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

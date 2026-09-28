@@ -53,13 +53,8 @@ test("configure a field set rule and apply it when saving a record", async ({ pa
   });
   expect(layoutOrder).toEqual({ objectActionsAboveRules: true, addRuleBelowTable: true });
   await page.getByRole("button", { name: "Add set rule" }).click();
-  await page.getByLabel("Set rule field").selectOption("datatype");
-  await expect(page.getByLabel("Set rule data type").locator("option")).toHaveText([
-    "Select data type",
-    "Default",
-  ]);
-  await page.getByLabel("Set rule data type").selectOption("default");
-  await expect(page.getByLabel("Set rule value formula")).toHaveValue("'default'");
+  await expect(page.getByLabel("Set rule field").locator('option[value="datatype"]')).toHaveCount(0);
+  await expect(page.getByLabel("Set rule data type")).toHaveCount(0);
   await page.getByLabel("Set rule field").selectOption("status");
   await page.getByLabel("Set rule condition formula").fill("[title] =");
   await page.getByLabel("Set rule value formula").fill("'published'");
@@ -102,4 +97,21 @@ test("configure a field set rule and apply it when saving a record", async ({ pa
   const saved = await page.evaluate(async (connectionId) =>
     await (await fetch(`/api/connections/${connectionId}/tables/z_editor_records/records?search=Set%20rule%20browser`)).json(), id);
   expect(saved.rows[0].values.status).toBe("published");
+
+  await page.getByRole("button", { name: "Object editor" }).click();
+  await page.getByRole("combobox", { name: "Connection", exact: true }).selectOption(String(id));
+  await page.getByRole("combobox", { name: "Table", exact: true }).selectOption("z_editor_records");
+  const deletion = page.waitForResponse((response) =>
+    response.request().method() === "PUT" && response.url().endsWith("/tables/z_editor_records/object"));
+  await page.getByRole("button", { name: "Delete set rule 1" }).click();
+  expect((await deletion).ok()).toBe(true);
+  await expect(page.getByText("No field set rules.", { exact: true })).toBeVisible();
+  const afterDelete = await page.evaluate(async (connectionId) =>
+    await (await fetch(`/api/admin/connections/${connectionId}/tables/z_editor_records/object`)).json(), id);
+  expect(afterDelete.fieldSetRules).toEqual([]);
+  await page.reload();
+  await page.getByRole("button", { name: "Object editor" }).click();
+  await page.getByRole("combobox", { name: "Connection", exact: true }).selectOption(String(id));
+  await page.getByRole("combobox", { name: "Table", exact: true }).selectOption("z_editor_records");
+  await expect(page.getByText("No field set rules.", { exact: true })).toBeVisible();
 });

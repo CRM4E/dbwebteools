@@ -428,11 +428,22 @@ tbody tr:hover {
   justify-content: flex-end;
 }
 .field-set-rules {
-  padding: 20px 24px;
-  border-top: 1px solid #e8ede6;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #d8e1da;
+  min-width: 0;
+  max-width: 100%;
 }
-.field-set-rules .card-title {
-  margin-bottom: 14px;
+.field-set-rules .table-scroll {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-inline: contain;
 }
 .field-set-rule-actions {
   justify-content: flex-end;
@@ -452,6 +463,19 @@ tbody tr:hover {
 }
 .field-set-rules textarea {
   min-height: 84px;
+}
+.field-set-rules .formula-help {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #dfe7dc;
+  border-radius: 8px;
+  background: #f7faf6;
+}
+.field-set-rules .formula-help p {
+  margin: 0 0 8px;
+}
+.field-set-rules .formula-help p:last-child {
+  margin-bottom: 0;
 }
 .icon-btn {
   border: 0;
