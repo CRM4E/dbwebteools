@@ -925,7 +925,7 @@ test("data type rules block invalid creates and updates", async ({
   let dialog = page.getByRole("dialog");
   const createDatatype = dialog.getByLabel("Data type", { exact: true });
   await expect(createDatatype).toBeEnabled();
-  await expect(createDatatype.locator("option")).toHaveText(["Choose a value…", "Default", "Secondary"]);
+  await expect(createDatatype.locator("option")).toHaveText(["Use database default", "Default", "Secondary"]);
   await createDatatype.selectOption("secondary");
   await expect(dialog.getByText(/Required format: Format: AA-##\?/)).toBeVisible();
   const noteInput = dialog.getByLabel("note", { exact: true });
