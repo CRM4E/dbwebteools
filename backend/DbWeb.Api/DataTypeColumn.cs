@@ -6,6 +6,22 @@ public static class DataTypeColumn
 {
     public const string Name = "datatype";
 
+    public static LayoutField Presentation(ObjectDefinition definition) =>
+        new(
+            Name,
+            "Data type",
+            "",
+            int.MaxValue,
+            false,
+            true,
+            "dropdown",
+            Options: definition.DataTypes!
+                .Select(type => new DropdownOption(type.Key, type.Label))
+                .ToList(),
+            ShowInList: true,
+            ListOrder: int.MaxValue
+        );
+
     public static bool Is(string? name) =>
         name != null && name.Equals(Name, StringComparison.OrdinalIgnoreCase);
 

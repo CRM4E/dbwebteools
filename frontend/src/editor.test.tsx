@@ -31,6 +31,61 @@ const columns = [
   },
 ];
 describe("Record editor", () => {
+  it.each([
+    ["add", null, { datatype: "invoice" }],
+    ["edit", { values: { datatype: "invoice", name: "Original" }, version: "v1" }, {}],
+  ])(
+    "shows friendly read-only datatype in the %s form and never submits it",
+    async (_mode, row, initialValues) => {
+      const save = vi.fn().mockResolvedValue(undefined);
+      render(
+        <RecordEditor
+          columns={[
+            ...columns,
+            {
+              name: "datatype",
+              type: "varchar",
+              nullable: false,
+              primaryKey: false,
+              generated: false,
+              autoIncrement: false,
+              default: null,
+              canWrite: false,
+            },
+          ]}
+          fields={[
+            {
+              name: "datatype",
+              label: "Data type",
+              section: "",
+              order: 99,
+              hidden: false,
+              readOnly: true,
+              widget: "dropdown",
+              options: [
+                { key: "invoice", display: "Customer invoice" },
+                { key: "credit", display: "Credit note" },
+              ],
+            },
+          ]}
+          row={row}
+          initialValues={initialValues}
+          close={() => {}}
+          save={save}
+        />,
+      );
+
+      const datatype = screen.getByLabelText("Data type") as HTMLSelectElement;
+      expect(datatype.disabled).toBe(true);
+      expect(datatype.selectedOptions[0].textContent).toBe("Customer invoice");
+      fireEvent.change(screen.getByLabelText("name"), {
+        target: { value: "Changed" },
+      });
+      fireEvent.click(screen.getByText("Save record"));
+      await waitFor(() => expect(save).toHaveBeenCalledWith({ name: "Changed" }));
+    },
+  );
+
   it("omits generated primary keys and submits editable fields", async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     render(

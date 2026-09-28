@@ -1603,7 +1603,9 @@ function Admin({
         .then(([p, s]) => {
           if (active) {
             setFields([
-              ...p.columns.map(
+              ...p.columns
+                .filter((c) => c.name.toLowerCase() !== "datatype")
+                .map(
                 (c, i) =>
                   s.fields.find((f) => f.name === c.name) || {
                     name: c.name,

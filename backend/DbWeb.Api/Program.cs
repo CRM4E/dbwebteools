@@ -571,7 +571,7 @@ api.MapGet(
             descending ?? false,
             search,
             definition.View,
-            definition.Fields,
+            safeFields,
             readable: readable,
             lookupSearchFields: string.IsNullOrEmpty(search)
                 ? []

@@ -197,7 +197,8 @@ public partial class ApiTests
             Assert.Contains("SENSITIVE_TOKEN", await member.GetStringAsync(path + "/records"));
             var unrestrictedSettings = await member.GetStringAsync(path + "/settings");
             Assert.Contains("type_formula", unrestrictedSettings);
-            Assert.DoesNotContain("\"name\":\"datatype\"", unrestrictedSettings);
+            Assert.Contains("\"name\":\"datatype\"", unrestrictedSettings);
+            Assert.Contains("\"display\":\"Default\"", unrestrictedSettings);
             Dictionary<string, string> policy = new()
             {
                 ["name"] = "write",
@@ -238,7 +239,14 @@ public partial class ApiTests
                 "default",
                 row.GetProperty("joinedValues").GetProperty("type_formula").GetString()
             );
-            Assert.False(row.GetProperty("values").TryGetProperty("datatype", out _));
+            Assert.Equal(
+                "default",
+                row.GetProperty("values").GetProperty("datatype").GetString()
+            );
+            Assert.Equal(
+                "Default",
+                row.GetProperty("displayValues").GetProperty("datatype").GetString()
+            );
             Assert.False(row.GetProperty("values").TryGetProperty("id", out _));
             Assert.True(records.GetProperty("hasPrimaryKey").GetBoolean());
             var key = new Dictionary<string, string>
