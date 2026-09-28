@@ -355,7 +355,6 @@ export function ObjectEditor({
         && !["binary", "varbinary", "geometry"].includes(column.type.toLowerCase())
         && !["join", "formula", "sumup"].includes(field.widget);
     }).map((field) => ({ name: field.name, label: field.label || field.name })),
-    ...(dataTypes.length > 0 ? [{ name: "datatype", label: "Data type" }] : []),
   ];
   const patchField = (patch: Partial<ObjectField>) =>
     setFieldDraft((old) => (old ? { ...old, ...patch } : old));
@@ -1280,7 +1279,6 @@ export function ObjectEditor({
                 value={fieldSetRules}
                 fields={fieldSetCandidates}
                 runtimeFields={runtimeFields}
-                dataTypes={dataTypes}
                 connection={connection}
                 table={table}
                 disabled={busy || objectLoading}

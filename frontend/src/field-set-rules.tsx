@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { api, type DataTypeDefinition, type Field, type FieldSetRule } from "./api";
+import { api, type Field, type FieldSetRule } from "./api";
 
 type Candidate = { name: string; label: string };
 
@@ -7,7 +7,6 @@ export function FieldSetRulesEditor({
   value,
   fields,
   runtimeFields,
-  dataTypes,
   connection,
   table,
   disabled,
@@ -17,7 +16,6 @@ export function FieldSetRulesEditor({
   value: FieldSetRule[];
   fields: Candidate[];
   runtimeFields: Field[];
-  dataTypes: DataTypeDefinition[];
   connection: number;
   table: string;
   disabled?: boolean;
@@ -44,11 +42,6 @@ export function FieldSetRulesEditor({
       index,
     });
   const complete = !!draft?.field && !!draft.condition.trim() && !!draft.value.trim();
-  const dataTypeExpression = (key: string) =>
-    "'" + key.replaceAll("\\", "\\\\").replaceAll("'", "\\'") + "'";
-  const selectedDataTypeKey = draft?.field === "datatype"
-    ? dataTypes.find((dataType) => draft.value === dataTypeExpression(dataType.key))?.key || ""
-    : "";
   return (
     <section className="field-set-rules" aria-label="Field set rules">
       <div className="card-title">
@@ -67,7 +60,7 @@ export function FieldSetRulesEditor({
             {value.length === 0 && <tr><td colSpan={4} className="muted">No field set rules.</td></tr>}
             {value.map((rule, index) => (
               <tr key={`${index}-${rule.field}`}>
-                <td>{fields.find((field) => field.name === rule.field)?.label || rule.field}<small className="muted database-field-details">{rule.field}</small></td>
+                <td>{fields.find((field) => field.name === rule.field)?.label || (rule.field === "datatype" ? "Data type" : rule.field)}<small className="muted database-field-details">{rule.field}</small></td>
                 <td><code>{rule.condition}</code></td>
                 <td><code>{rule.value}</code></td>
                 <td><div className="actions">
@@ -97,13 +90,10 @@ export function FieldSetRulesEditor({
         <div className="inline-editor" role="dialog" aria-label={draft.index == null ? "Add field set rule" : "Edit field set rule"}>
           <div className="form-grid">
             <label>Field to set<select aria-label="Set rule field" value={draft.field} disabled={disabled} onChange={(event) => updateDraft({ ...draft, field: event.target.value })}>
+              {!fields.some((field) => field.name === draft.field) && <option value={draft.field}>{draft.field === "datatype" ? "Data type · datatype" : draft.field}</option>}
               {fields.map((field) => <option key={field.name} value={field.name}>{field.label} · {field.name}</option>)}
             </select></label>
             <label>Condition formula<textarea aria-label="Set rule condition formula" maxLength={1024} required value={draft.condition} disabled={disabled} onChange={(event) => updateDraft({ ...draft, condition: event.target.value })} /></label>
-            {draft.field === "datatype" && <label>Data type<select aria-label="Set rule data type" value={selectedDataTypeKey} disabled={disabled} onChange={(event) => updateDraft({ ...draft, value: event.target.value ? dataTypeExpression(event.target.value) : "" })}>
-              <option value="">Select data type</option>
-              {dataTypes.map((dataType) => <option key={dataType.key} value={dataType.key}>{dataType.label}</option>)}
-            </select></label>}
             <label>Value formula<textarea aria-label="Set rule value formula" maxLength={1024} required value={draft.value} disabled={disabled} onChange={(event) => updateDraft({ ...draft, value: event.target.value })} /></label>
           </div>
           <div className="muted formula-help" aria-label="Field set rule formula help">
