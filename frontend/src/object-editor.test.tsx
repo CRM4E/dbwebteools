@@ -134,6 +134,8 @@ describe("Object field workflow", () => {
     await screen.findByText("varchar(100)");
 
     const rules = screen.getByRole("region", { name: "Field set rules" });
+    expect(screen.getByRole("heading", { name: "Field set rules", level: 2 })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add set rule" }).classList.contains("primary")).toBe(true);
     for (const name of ["Add field", "Add joined field", "Add formula field", "Save object"]) {
       const action = screen.getByRole("button", { name });
       expect(action.compareDocumentPosition(rules) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

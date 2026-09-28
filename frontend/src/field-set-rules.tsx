@@ -52,7 +52,7 @@ export function FieldSetRulesEditor({
     <section className="field-set-rules" aria-label="Field set rules">
       <div className="card-title">
         <div>
-          <h3>Field set rules</h3>
+          <h2>Field set rules</h2>
           <p className="muted">
             Rules run from top to bottom after field validation and before the record is saved.
             Later rules can use values set by earlier rules.
@@ -81,7 +81,7 @@ export function FieldSetRulesEditor({
         </table>
       </div>
       <div className="actions field-set-rule-actions">
-        <button type="button" disabled={disabled || value.length >= 50 || fields.length === 0} onClick={() => open()}>
+        <button type="button" className="primary" disabled={disabled || value.length >= 50 || fields.length === 0} onClick={() => open()}>
           Add set rule
         </button>
       </div>
