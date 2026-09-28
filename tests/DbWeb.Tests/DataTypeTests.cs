@@ -50,7 +50,7 @@ public partial class ApiTests
     }
 
     [Fact]
-    public void ManagedDatatypeIsAlwaysReadableAndWritableWithTableMutationAccess()
+    public void ManagedDatatypeIsAlwaysReadableAndWriteFollowsFieldPolicy()
     {
         Assert.True(new FieldAccess(null).Read("datatype"));
         Assert.True(new FieldAccess(null).Write("datatype"));
@@ -60,7 +60,8 @@ public partial class ApiTests
                 ["datatype"] = "none"
             }).Read("datatype")
         );
-        Assert.True(new FieldAccess(new() { ["datatype"] = "none" }).Write("datatype"));
+        Assert.False(new FieldAccess(new() { ["datatype"] = "none" }).Write("datatype"));
+        Assert.True(new FieldAccess(new() { ["datatype"] = "write" }).Write("datatype"));
     }
 
     [Fact]
@@ -324,6 +325,12 @@ public partial class ApiTests
             }))
                 .EnsureSuccessStatusCode();
             command.CommandText = $"SELECT datatype FROM `{table}` WHERE title='New'";
+            Assert.Equal("primary", (string?)await command.ExecuteScalarAsync());
+            (await admin.PostAsJsonAsync(apiRoot + "/create", new
+            {
+                values = new { title = "Explicit primary", datatype = "primary" }
+            })).EnsureSuccessStatusCode();
+            command.CommandText = $"SELECT datatype FROM `{table}` WHERE title='Explicit primary'";
             Assert.Equal("primary", (string?)await command.ExecuteScalarAsync());
 
             var page = await admin.GetFromJsonAsync<JsonElement>(apiRoot + "/records?sort=id");

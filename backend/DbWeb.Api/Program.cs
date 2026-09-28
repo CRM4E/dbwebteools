@@ -432,7 +432,6 @@ admin.MapPut(
                 || i.Fields.Any(f =>
                     !names.Contains(f.Key)
                     || f.Value is not "none" and not "read" and not "write"
-                    || DataTypeColumn.Is(f.Key) && f.Value == "write"
                 )
             )
                 throw new ApiError(

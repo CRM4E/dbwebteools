@@ -703,6 +703,7 @@ test("list columns and read-only joins refresh when a lookup changes", async ({
   expect((await mutation).postDataJSON().values).toEqual({
     title: "Joined browser order",
     person_id: "9007199254740993",
+    datatype: "default",
   });
   await expect(create).toHaveCount(0);
   const row = page.getByRole("row").filter({ hasText: "Joined browser order" });

@@ -1604,7 +1604,6 @@ function Admin({
           if (active) {
             setFields([
               ...p.columns
-                .filter((c) => c.name.toLowerCase() !== "datatype")
                 .map(
                 (c, i) =>
                   s.fields.find((f) => f.name === c.name) || {
