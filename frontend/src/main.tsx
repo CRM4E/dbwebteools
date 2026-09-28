@@ -850,6 +850,44 @@ export function RecordEditor({
   const [copiedLookups, setCopiedLookups] = useState<string[]>([]);
   const [joinBusy, setJoinBusy] = useState(false),
     [joinError, setJoinError] = useState("");
+  const selectedDataTypeKey = String(
+    values.datatype ?? row?.values.datatype ?? initialValues.datatype ?? "",
+  );
+  const dataTypeChanged =
+    !!row && selectedDataTypeKey !== String(row.values.datatype ?? "");
+  const effectiveFields = fields.map((field) => {
+    const constraint = field.dataTypeConstraints?.find(
+      (candidate) => candidate.key === selectedDataTypeKey,
+    );
+    return constraint
+      ? {
+          ...field,
+          required: constraint.required && !field.readOnly,
+          mask: constraint.mask,
+          enabledOptionKeys: constraint.enabledOptionKeys,
+        }
+      : field;
+  });
+  const requiredCheckboxConfig = JSON.stringify(
+    effectiveFields
+      .filter(
+        (field) =>
+          field.required &&
+          field.widget === "checkbox" &&
+          !field.hidden &&
+          !field.readOnly,
+      )
+      .map((field) => field.name),
+  );
+  useEffect(() => {
+    const names = JSON.parse(requiredCheckboxConfig) as string[];
+    setValues((old) => {
+      const missing = names.filter((name) => !(name in old));
+      return missing.length === 0
+        ? old
+        : { ...old, ...Object.fromEntries(missing.map((name) => [name, false])) };
+    });
+  }, [requiredCheckboxConfig]);
   const joinConfig = JSON.stringify(
     fields.filter(
       (f) => (f.widget === "join" && f.join) || f.widget === "formula",
@@ -939,7 +977,7 @@ export function RecordEditor({
       clearTimeout(timer);
     };
   }, [base, joinConfig, joinRequest]);
-  const layout = (c: Column) => fields.find((f) => f.name === c.name);
+  const layout = (c: Column) => effectiveFields.find((f) => f.name === c.name);
   const lockedCopy = (name: string) =>
     fields.some((f) =>
       f.lookup?.copyMappings?.some(
@@ -980,7 +1018,7 @@ export function RecordEditor({
                 field.enabledOptionKeys != null &&
                 values[c.name] != null &&
                 values[c.name] !== "" &&
-                (!row || values[c.name] !== row.values[c.name]) &&
+                (!row || dataTypeChanged || values[c.name] !== row.values[c.name]) &&
                 !field.enabledOptionKeys.includes(String(values[c.name]))
               )
                 throw new Error(
@@ -990,7 +1028,7 @@ export function RecordEditor({
                 field?.mask &&
                 !field.hidden &&
                 !field.readOnly &&
-                (!row || values[c.name] !== row.values[c.name])
+                (!row || dataTypeChanged || values[c.name] !== row.values[c.name])
               ) {
                 const maskError = maskValueError(field.mask, values[c.name]);
                 if (maskError)
@@ -1229,23 +1267,23 @@ export function RecordEditor({
                       aria-label={l?.label || c.name}
                       aria-describedby={l?.mask ? `mask-tip-${c.name}` : undefined}
                       minLength={
-                        l?.mask && (!row || values[c.name] !== row.values[c.name])
+                        l?.mask && (!row || dataTypeChanged || values[c.name] !== row.values[c.name])
                           ? maskMinimumLength(l.mask)
                           : undefined
                       }
                       maxLength={
                         l?.mask?.pattern != null &&
-                        (!row || values[c.name] !== row.values[c.name])
+                        (!row || dataTypeChanged || values[c.name] !== row.values[c.name])
                           ? maskMaximumLength(l.mask)
                           : undefined
                       }
-                      {...(l?.mask && (!row || values[c.name] !== row.values[c.name])
+                      {...(l?.mask && (!row || dataTypeChanged || values[c.name] !== row.values[c.name])
                         ? { pattern: maskRegexPattern(l.mask) }
                         : {})}
                       onInvalid={(event) => {
                         if (
                           l?.mask &&
-                          (!row || values[c.name] !== row.values[c.name]) &&
+                          (!row || dataTypeChanged || values[c.name] !== row.values[c.name]) &&
                           maskRegexPattern(l.mask)
                         ) {
                           event.preventDefault();
@@ -1265,7 +1303,7 @@ export function RecordEditor({
                       value={String(values[c.name] ?? "")}
                       onChange={(e) => {
                         const activeMask =
-                          l?.mask && (!row || e.target.value !== row.values[c.name])
+                          l?.mask && (!row || dataTypeChanged || e.target.value !== row.values[c.name])
                             ? l.mask
                             : undefined;
                         e.currentTarget.setCustomValidity(
@@ -1318,19 +1356,19 @@ export function RecordEditor({
                       aria-describedby={l?.mask ? `mask-tip-${c.name}` : undefined}
                       disabled={disabled}
                       minLength={
-                        l?.mask && (!row || values[c.name] !== row.values[c.name])
+                        l?.mask && (!row || dataTypeChanged || values[c.name] !== row.values[c.name])
                           ? maskMinimumLength(l.mask)
                           : undefined
                       }
                       pattern={
-                        l?.mask && (!row || values[c.name] !== row.values[c.name])
+                        l?.mask && (!row || dataTypeChanged || values[c.name] !== row.values[c.name])
                           ? maskRegexPattern(l.mask)
                           : undefined
                       }
                       onInvalid={(event) => {
                         if (
                           l?.mask &&
-                          (!row || values[c.name] !== row.values[c.name]) &&
+                          (!row || dataTypeChanged || values[c.name] !== row.values[c.name]) &&
                           maskRegexPattern(l.mask)
                         ) {
                           event.preventDefault();
@@ -1358,7 +1396,7 @@ export function RecordEditor({
                         l?.widget === "email"
                           ? 255
                           : l?.mask?.pattern != null &&
-                              (!row || values[c.name] !== row.values[c.name])
+                              (!row || dataTypeChanged || values[c.name] !== row.values[c.name])
                             ? maskMaximumLength(l.mask)
                             : undefined
                       }

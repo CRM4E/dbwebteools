@@ -927,22 +927,12 @@ test("data type rules block invalid creates and updates", async ({
   await expect(createDatatype).toBeEnabled();
   await expect(createDatatype.locator("option")).toHaveText(["Use database default", "Default", "Secondary"]);
   await createDatatype.selectOption("secondary");
-  await expect(dialog.getByText(/Required format: Format: AA-##\?/)).toBeVisible();
+  await expect(dialog.getByText(/Required format: Format: AA-##\?/)).toHaveCount(0);
   const noteInput = dialog.getByLabel("note", { exact: true });
-  await expect(noteInput).toHaveAttribute(
-    "pattern",
-    "[A-Za-z][A-Za-z]\\x2d[0-9](?:[0-9])?",
-  );
-  await dialog.getByLabel("title", { exact: true }).fill("   ");
-  await noteInput.fill("AB-1");
-  await dialog.getByRole("button", { name: "Save record" }).click();
-  await expect(dialog.getByRole("alert")).toContainText("title is required.");
+  await expect(noteInput).not.toHaveAttribute("pattern");
   const title = "Required browser " + Date.now();
   await dialog.getByLabel("title", { exact: true }).fill(title);
-  await noteInput.fill("AB_1");
-  expect(await noteInput.evaluate((input: HTMLInputElement) => input.validity.patternMismatch)).toBe(true);
-  await noteInput.fill("AB-1");
-  expect(await noteInput.evaluate((input: HTMLInputElement) => input.validity.patternMismatch)).toBe(false);
+  await noteInput.fill("free form");
   await dialog.getByRole("button", { name: "Save record" }).click();
   await expect(dialog).toHaveCount(0);
   const row = page
@@ -954,11 +944,20 @@ test("data type rules block invalid creates and updates", async ({
   const editDatatype = dialog.getByLabel("Data type", { exact: true });
   await expect(editDatatype).toBeEnabled();
   await editDatatype.selectOption("default");
+  await expect(dialog.getByText(/Required format: Format: AA-##\?/)).toBeVisible();
+  await expect(dialog.getByLabel("note", { exact: true })).toHaveAttribute(
+    "pattern",
+    "[A-Za-z][A-Za-z]\\x2d[0-9](?:[0-9])?",
+  );
+  await dialog.getByLabel("note", { exact: true }).fill("CD-34");
   await dialog.getByLabel("title", { exact: true }).fill(" ");
   await dialog.getByRole("button", { name: "Save record" }).click();
   await expect(dialog.getByRole("alert")).toHaveText("title is required.");
   await dialog.getByLabel("title", { exact: true }).fill(title);
+  await dialog.getByLabel("note", { exact: true }).fill("CD_34");
+  expect(await dialog.getByLabel("note", { exact: true }).evaluate((input: HTMLInputElement) => input.validity.patternMismatch)).toBe(true);
   await dialog.getByLabel("note", { exact: true }).fill("CD-34");
+  expect(await dialog.getByLabel("note", { exact: true }).evaluate((input: HTMLInputElement) => input.validity.patternMismatch)).toBe(false);
   await dialog.getByRole("button", { name: "Save record" }).click();
   await expect(dialog).toHaveCount(0);
   await row.getByRole("button", { name: /Delete record/ }).click();

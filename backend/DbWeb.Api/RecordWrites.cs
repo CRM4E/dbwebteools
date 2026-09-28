@@ -82,12 +82,41 @@ public static class RecordWrites
                 DataTypeColumn.RequireReady(columns);
             if (hasManagedDataType)
             {
-                if (input.Values.TryGetValue(DataTypeColumn.Name, out var requestedDataType))
+                var submittedDataType = input.Values.TryGetValue(
+                    DataTypeColumn.Name,
+                    out var requestedDataType
+                );
+                if (submittedDataType)
                     DataTypeColumn.ValidateValue(requestedDataType, dataTypeKeys);
                 else if (op == "create")
                     input.Values[DataTypeColumn.Name] = JsonSerializer.SerializeToElement(
                         stored.Object.DefaultDataTypeKey!
                     );
+                var selectedDataType = input.Values.TryGetValue(
+                    DataTypeColumn.Name,
+                    out var effectiveDataType
+                )
+                    ? effectiveDataType.GetString()
+                    : stored.Object.DefaultDataTypeKey;
+                if (submittedDataType)
+                {
+                    var access = await FieldAccess.For(db, ctx, id, table);
+                    var constrained = stored.Object.DataTypes!
+                        .Single(type => type.Key == selectedDataType)
+                        .Fields.Where(field =>
+                            field.Required
+                            || field.Mask != null
+                            || field.OverrideDropdownOptions
+                        );
+                    if (constrained.Any(field =>
+                        !access.Read(field.Name) || !access.Write(field.Name)
+                    ))
+                        throw new ApiError(
+                            403,
+                            "Changing data type requires read and write access to its constrained fields."
+                        );
+                }
+                fields = DataTypeColumn.ApplyConstraints(fields, selectedDataType);
             }
             if (op == "create")
                 DatabaseService.ApplyCreationDefaults(

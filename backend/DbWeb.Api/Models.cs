@@ -110,7 +110,19 @@ public record LayoutField(
     {
         get; init;
     }
+
+    public List<DataTypeFieldConstraint>? DataTypeConstraints
+    {
+        get; init;
+    }
 }
+
+public record DataTypeFieldConstraint(
+    string Key,
+    bool Required,
+    InputMask? Mask,
+    List<string>? EnabledOptionKeys
+);
 
 public class AuditEntry
 {

@@ -186,6 +186,29 @@ public partial class ApiTests
     }
 
     [Fact]
+    public void SelectedTypeAppliesItsOwnRequiredAndDropdownConstraints()
+    {
+        var definition = new ObjectDefinition(
+            [new("status", "Status", false, "dropdown", Options: [new("a", "Active"), new("b", "Blocked")]), new("code", "Code", false, "text")],
+            DataTypes:
+            [
+                new("standard", "Standard", [new("status"), new("code")]),
+                new("strict", "Strict", [new("status", OverrideDropdownOptions: true, EnabledOptionKeys: ["a"]), new("code", Required: true)]),
+            ],
+            DefaultDataTypeKey: "standard"
+        );
+
+        var merged = ObjectModel.Merge(definition, new([new("status"), new("code")]));
+        var standardCode = merged.Fields.Single(field => field.Name == "code");
+        Assert.False(standardCode.Required);
+        Assert.Equal(2, standardCode.DataTypeConstraints!.Count);
+
+        var strict = DataTypeColumn.ApplyConstraints(merged.Fields, "strict");
+        Assert.True(strict.Single(field => field.Name == "code").Required);
+        Assert.Equal(["a"], strict.Single(field => field.Name == "status").EnabledOptionKeys);
+    }
+
+    [Fact]
     public void NormalizationCleansDeletedFieldsAndPreservesExplicitEmptyOverride()
     {
         var stored = ObjectModel.Normalize(
@@ -229,8 +252,8 @@ public partial class ApiTests
         var table = "datatype_" + Guid.NewGuid().ToString("N");
         await using var command = connection.CreateCommand();
         command.CommandText =
-            $"CREATE TABLE `{table}`(id INT AUTO_INCREMENT PRIMARY KEY,title VARCHAR(80));" +
-            $"INSERT INTO `{table}`(title) VALUES('Existing')";
+            $"CREATE TABLE `{table}`(id INT AUTO_INCREMENT PRIMARY KEY,title VARCHAR(80),code VARCHAR(80),status VARCHAR(20));" +
+            $"INSERT INTO `{table}`(title,status) VALUES('Existing','b')";
         await command.ExecuteNonQueryAsync();
         try
         {
@@ -276,6 +299,15 @@ public partial class ApiTests
                 .EnsureSuccessStatusCode();
             definition = definition with
             {
+                Fields = definition.Fields.Select(field =>
+                    field.Name == "status"
+                        ? field with
+                        {
+                            Widget = "dropdown",
+                            Options = [new("a", "Active"), new("b", "Blocked")],
+                        }
+                        : field
+                ).ToList(),
                 DataTypes =
                 [
                     new(
@@ -334,7 +366,9 @@ public partial class ApiTests
             Assert.Equal("primary", (string?)await command.ExecuteScalarAsync());
 
             var page = await admin.GetFromJsonAsync<JsonElement>(apiRoot + "/records?sort=id");
-            var row = page.GetProperty("rows")[1];
+            var row = page.GetProperty("rows").EnumerateArray().Single(candidate =>
+                candidate.GetProperty("values").GetProperty("title").GetString() == "Existing"
+            );
             Assert.Equal("primary", row.GetProperty("values").GetProperty("datatype").GetString());
             Assert.Equal(
                 "Primary label",
@@ -368,7 +402,14 @@ public partial class ApiTests
             var secondary = new ObjectDataType(
                 "secondary",
                 "Secondary",
-                current.Fields.Select(field => new ObjectDataTypeField(field.Name)).ToList()
+                current.Fields.Select(field =>
+                    new ObjectDataTypeField(
+                        field.Name,
+                        Required: field.Name == "code",
+                        OverrideDropdownOptions: field.Name == "status",
+                        EnabledOptionKeys: field.Name == "status" ? ["a"] : []
+                    )
+                ).ToList()
             );
             current = current with
             {
@@ -377,12 +418,38 @@ public partial class ApiTests
             };
             (await admin.PutAsJsonAsync(adminRoot + "/object", current)).EnsureSuccessStatusCode();
             page = await admin.GetFromJsonAsync<JsonElement>(apiRoot + "/records?sort=id");
-            row = page.GetProperty("rows")[1];
+            row = page.GetProperty("rows").EnumerateArray().Single(candidate =>
+                candidate.GetProperty("values").GetProperty("title").GetString() == "Existing"
+            );
+            Assert.Equal(
+                HttpStatusCode.BadRequest,
+                (await admin.PostAsJsonAsync(
+                    apiRoot + "/update",
+                    new
+                    {
+                        values = new { datatype = "secondary" },
+                        key = new { id = row.GetProperty("values").GetProperty("id").GetInt32() },
+                        version = row.GetProperty("version").GetString(),
+                    }
+                )).StatusCode
+            );
+            Assert.Equal(
+                HttpStatusCode.BadRequest,
+                (await admin.PostAsJsonAsync(
+                    apiRoot + "/update",
+                    new
+                    {
+                        values = new { datatype = "secondary", code = "ready" },
+                        key = new { id = row.GetProperty("values").GetProperty("id").GetInt32() },
+                        version = row.GetProperty("version").GetString(),
+                    }
+                )).StatusCode
+            );
             (await admin.PostAsJsonAsync(
                 apiRoot + "/update",
                 new
                 {
-                    values = new { datatype = "secondary" },
+                    values = new { datatype = "secondary", code = "ready", status = "a" },
                     key = new { id = row.GetProperty("values").GetProperty("id").GetInt32() },
                     version = row.GetProperty("version").GetString(),
                 }
@@ -394,12 +461,15 @@ public partial class ApiTests
             {
                 values = new
                 {
-                    title = "Secondary row"
+                    title = "Secondary row",
+                    code = "ready",
+                    status = "a"
                 }
             })).EnsureSuccessStatusCode();
             command.CommandText = $"SELECT datatype FROM `{table}` WHERE title='Secondary row'";
             Assert.Equal("secondary", (string?)await command.ExecuteScalarAsync());
-            command.CommandText = $"SELECT datatype FROM `{table}` WHERE title='Existing'";
+            command.CommandText =
+                $"SELECT datatype FROM `{table}` WHERE title='Before provisioning'";
             Assert.Equal("primary", (string?)await command.ExecuteScalarAsync());
 
             var removeUsed = current with
