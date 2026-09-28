@@ -86,7 +86,13 @@ public partial class ApiTests
             Assert.Equal(0, settings.GetProperty("fields")[2].GetProperty("listOrder").GetInt32());
             var result = await admin.GetFromJsonAsync<JsonElement>(path + "/records");
             Assert.Equal(3, result.GetProperty("total").GetInt32());
-            Assert.Equal(3, result.GetProperty("columns").GetArrayLength());
+            Assert.Equal(4, result.GetProperty("columns").GetArrayLength());
+            Assert.Contains(
+                "datatype",
+                result.GetProperty("columns").EnumerateArray().Select(column =>
+                    column.GetProperty("name").GetString()
+                )
+            );
             Assert.Equal(2, result.GetProperty("joinedColumns").GetArrayLength());
             var rows = result.GetProperty("rows");
             Assert.False(rows[0].GetProperty("values").TryGetProperty("customer_email", out _));
