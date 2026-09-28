@@ -28,6 +28,7 @@ export function FieldSetRulesEditor({
   const [feedback, setFeedback] = useState<{ message: string; valid: boolean } | null>(null);
   const [validating, setValidating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<number | null>(null);
   const validationRevision = useRef(0);
   const updateDraft = (next: FieldSetRule & { index: number | null }) => {
     validationRevision.current++;
@@ -73,7 +74,14 @@ export function FieldSetRulesEditor({
                   <button type="button" disabled={disabled} aria-label={`Edit set rule ${index + 1}`} onClick={() => open(rule, index)}>Edit</button>
                   <button type="button" disabled={disabled || index === 0} aria-label={`Move set rule ${index + 1} up`} onClick={() => { const next = [...value]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; change(next); }}>↑</button>
                   <button type="button" disabled={disabled || index === value.length - 1} aria-label={`Move set rule ${index + 1} down`} onClick={() => { const next = [...value]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; change(next); }}>↓</button>
-                  <button type="button" className="danger" disabled={disabled} aria-label={`Delete set rule ${index + 1}`} onClick={() => change(value.filter((_, candidate) => candidate !== index))}>Delete</button>
+                  <button type="button" className="danger" disabled={disabled || deleting != null} aria-label={`Delete set rule ${index + 1}`} onClick={async () => {
+                    setDeleting(index);
+                    try {
+                      await save(value.filter((_, candidate) => candidate !== index));
+                    } finally {
+                      setDeleting(null);
+                    }
+                  }}>{deleting === index ? "Deleting…" : "Delete"}</button>
                 </div></td>
               </tr>
             ))}

@@ -91,7 +91,6 @@ describe("Object field workflow", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add field set rule" })).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "Move set rule 2 up" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete set rule 2" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save object" }));
 
     await waitFor(() => expect(api).toHaveBeenCalledWith(
       "/admin/connections/1/tables/things/object",
