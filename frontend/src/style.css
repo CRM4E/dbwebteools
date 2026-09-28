@@ -434,6 +434,11 @@ tbody tr:hover {
 .field-set-rules .card-title {
   margin-bottom: 14px;
 }
+.field-set-rule-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
 .field-set-rules code {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

@@ -128,14 +128,21 @@ describe("Object field workflow", () => {
     expect((screen.getByLabelText("Set rule value formula") as HTMLTextAreaElement).value).toBe("'premium'");
   });
 
-  it("places object action buttons above the Data Types section", async () => {
+  it("places object actions above field set rules and the add-rule action below its table", async () => {
     mockApi();
     render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
     await screen.findByText("varchar(100)");
 
-    const addField = screen.getByRole("button", { name: "Add field" });
-    const dataTypes = screen.getByRole("heading", { name: "Data Types" });
-    expect(addField.compareDocumentPosition(dataTypes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const rules = screen.getByRole("region", { name: "Field set rules" });
+    for (const name of ["Add field", "Add joined field", "Add formula field", "Save object"]) {
+      const action = screen.getByRole("button", { name });
+      expect(action.compareDocumentPosition(rules) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+
+    const rulesTable = rules.querySelector("table");
+    const addRule = screen.getByRole("button", { name: "Add set rule" });
+    expect(rulesTable).not.toBeNull();
+    expect(rulesTable!.compareDocumentPosition(addRule) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("keeps the list read-only and saves behavior from an accessible edit dialog", async () => {

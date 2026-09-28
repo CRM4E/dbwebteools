@@ -35,6 +35,20 @@ test("configure a field set rule and apply it when saving a record", async ({ pa
   await page.getByRole("button", { name: "Object editor" }).click();
   await page.getByRole("combobox", { name: "Connection", exact: true }).selectOption(String(id));
   await page.getByRole("combobox", { name: "Table", exact: true }).selectOption("z_editor_records");
+  const layoutOrder = await page.evaluate(() => {
+    const rules = document.querySelector('section[aria-label="Field set rules"]');
+    const rulesTable = rules?.querySelector("table");
+    const buttons = Array.from(document.querySelectorAll("button"));
+    const button = (name: string) => buttons.find((candidate) => candidate.textContent?.trim() === name);
+    const precedes = (first?: Element | null, second?: Element | null) =>
+      !!first && !!second && !!(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+    return {
+      objectActionsAboveRules: ["Add field", "Add joined field", "Add formula field", "Save object"]
+        .every((name) => precedes(button(name), rules)),
+      addRuleBelowTable: precedes(rulesTable, button("Add set rule")),
+    };
+  });
+  expect(layoutOrder).toEqual({ objectActionsAboveRules: true, addRuleBelowTable: true });
   await page.getByRole("button", { name: "Add set rule" }).click();
   await page.getByLabel("Set rule field").selectOption("datatype");
   await expect(page.getByLabel("Set rule data type").locator("option")).toHaveText([

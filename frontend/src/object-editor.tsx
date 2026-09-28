@@ -1129,18 +1129,6 @@ export function ObjectEditor({
                   </tbody>
                 </table>
               </div>
-              <FieldSetRulesEditor
-                key={`${connection}:${table}`}
-                value={fieldSetRules}
-                fields={fieldSetCandidates}
-                runtimeFields={runtimeFields}
-                dataTypes={dataTypes}
-                connection={connection}
-                table={table}
-                disabled={busy || objectLoading}
-                change={setFieldSetRules}
-                save={saveFieldSetRules}
-              />
               <div className="object-editor-footer">
                 <div className="actions object-field-actions">
                   <button
@@ -1287,6 +1275,18 @@ export function ObjectEditor({
                   </button>
                 </div>
               </div>
+              <FieldSetRulesEditor
+                key={`${connection}:${table}`}
+                value={fieldSetRules}
+                fields={fieldSetCandidates}
+                runtimeFields={runtimeFields}
+                dataTypes={dataTypes}
+                connection={connection}
+                table={table}
+                disabled={busy || objectLoading}
+                change={setFieldSetRules}
+                save={saveFieldSetRules}
+              />
               <DataTypesEditor
                 dataTypes={dataTypes}
                 defaultDataTypeKey={defaultDataTypeKey}
