@@ -29,8 +29,9 @@ public sealed class FieldAccess(Dictionary<string, string>? levels)
     public bool Explicit => levels != null;
 
     public bool Read(string name) =>
-        !DataTypeColumn.Is(name)
-        && (levels == null || levels.GetValueOrDefault(name) is "read" or "write");
+        DataTypeColumn.Is(name)
+        || levels == null
+        || levels.GetValueOrDefault(name) is "read" or "write";
 
     public bool Write(string name) =>
         !DataTypeColumn.Is(name) && (levels == null || levels.GetValueOrDefault(name) == "write");
@@ -171,6 +172,17 @@ public sealed class FieldAccess(Dictionary<string, string>? levels)
     )
     {
         var access = await For(db, ctx, connection, table);
+        if (
+            columns.Any(column => DataTypeColumn.Is(column.Name))
+            && !fields.Any(field => DataTypeColumn.Is(field.Name))
+        )
+        {
+            var configuration = await db.Layouts.SingleOrDefaultAsync(layout =>
+                layout.ConnectionId == connection && layout.Table == table
+            );
+            var stored = ObjectModel.Stored(configuration?.FieldsJson);
+            fields = [.. fields, DataTypeColumn.Presentation(stored.Object)];
+        }
         var result = new List<LayoutField>();
         foreach (var field in fields.Where(f => access.Read(f.Name)))
         {
@@ -308,9 +320,9 @@ public sealed class FieldAccess(Dictionary<string, string>? levels)
     {
         var keys = result.Columns.Where(c => c.PrimaryKey).Select(c => c.Name).ToList();
         result.HasPrimaryKey = keys.Count > 0;
-        // The backend-managed datatype column is intentionally omitted from every
-        // response. Its presence alone must not make an otherwise unrestricted row
-        // use protected record keys and versions. Actual field restrictions still do.
+        // The backend-managed datatype is public record metadata, but never writable.
+        // Its presence alone must not make an otherwise unrestricted row use protected
+        // record keys and versions. Actual field restrictions still do.
         var restricted =
             access.Explicit
             || result.Columns.Any(col =>

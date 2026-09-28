@@ -50,15 +50,42 @@ public partial class ApiTests
     }
 
     [Fact]
-    public void ManagedDatatypeIsNeverUserReadableOrWritable()
+    public void ManagedDatatypeIsAlwaysReadableButNeverWritable()
     {
-        Assert.False(new FieldAccess(null).Read("datatype"));
+        Assert.True(new FieldAccess(null).Read("datatype"));
         Assert.False(new FieldAccess(null).Write("datatype"));
-        Assert.False(
+        Assert.True(
             new FieldAccess(new()
             {
-                ["datatype"] = "write"
+                ["datatype"] = "none"
             }).Read("datatype")
+        );
+        Assert.False(new FieldAccess(new() { ["datatype"] = "write" }).Write("datatype"));
+    }
+
+    [Fact]
+    public void ManagedDatatypePresentationUsesConfiguredFriendlyLabelsAndIsReadOnly()
+    {
+        var field = DataTypeColumn.Presentation(
+            new ObjectDefinition(
+                [],
+                DataTypes:
+                [
+                    new("invoice", "Customer invoice", []),
+                    new("credit", "Credit note", []),
+                ],
+                DefaultDataTypeKey: "invoice"
+            )
+        );
+
+        Assert.Equal("Data type", field.Label);
+        Assert.True(field.ReadOnly);
+        Assert.False(field.Hidden);
+        Assert.True(field.ShowInList);
+        Assert.Equal("dropdown", field.Widget);
+        Assert.Equal(
+            [("invoice", "Customer invoice"), ("credit", "Credit note")],
+            field.Options!.Select(option => (option.Key, option.Display))
         );
     }
 
@@ -308,7 +335,20 @@ public partial class ApiTests
 
             var page = await admin.GetFromJsonAsync<JsonElement>(apiRoot + "/records?sort=id");
             var row = page.GetProperty("rows")[1];
-            Assert.False(row.GetProperty("values").TryGetProperty("datatype", out _));
+            Assert.Equal("primary", row.GetProperty("values").GetProperty("datatype").GetString());
+            Assert.Equal(
+                "Primary label",
+                row.GetProperty("displayValues").GetProperty("datatype").GetString()
+            );
+            var settings = await admin.GetFromJsonAsync<JsonElement>(apiRoot + "/settings");
+            var datatypeField = settings.GetProperty("fields")
+                .EnumerateArray()
+                .Single(field => field.GetProperty("name").GetString() == "datatype");
+            Assert.True(datatypeField.GetProperty("readOnly").GetBoolean());
+            Assert.Equal(
+                "Primary label",
+                datatypeField.GetProperty("options")[0].GetProperty("display").GetString()
+            );
             Assert.Equal(
                 HttpStatusCode.Forbidden,
                 (
