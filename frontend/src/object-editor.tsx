@@ -297,10 +297,11 @@ export function ObjectEditor({
       setFieldSetRules(nextRules);
       setMessage("Field set rule saved.");
       onChanged();
-      return true;
+      return null;
     } catch (reason) {
-      setError((reason as Error).message);
-      return false;
+      const message = (reason as Error).message;
+      setError(message);
+      return message;
     } finally {
       setBusy(false);
     }
