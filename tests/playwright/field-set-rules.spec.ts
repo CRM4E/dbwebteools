@@ -53,13 +53,8 @@ test("configure a field set rule and apply it when saving a record", async ({ pa
   });
   expect(layoutOrder).toEqual({ objectActionsAboveRules: true, addRuleBelowTable: true });
   await page.getByRole("button", { name: "Add set rule" }).click();
-  await page.getByLabel("Set rule field").selectOption("datatype");
-  await expect(page.getByLabel("Set rule data type").locator("option")).toHaveText([
-    "Select data type",
-    "Default",
-  ]);
-  await page.getByLabel("Set rule data type").selectOption("default");
-  await expect(page.getByLabel("Set rule value formula")).toHaveValue("'default'");
+  await expect(page.getByLabel("Set rule field").locator('option[value="datatype"]')).toHaveCount(0);
+  await expect(page.getByLabel("Set rule data type")).toHaveCount(0);
   await page.getByLabel("Set rule field").selectOption("status");
   await page.getByLabel("Set rule condition formula").fill("[title] =");
   await page.getByLabel("Set rule value formula").fill("'published'");
