@@ -22,11 +22,13 @@ const definition = { fields: [
   { name: "title", label: "Title", readOnly: false, widget: "text" },
 ], view: {} };
 
-function mockApi(objectDefinition: unknown = definition) {
+function mockApi(objectDefinition: unknown = definition, objectSaveError?: string) {
   vi.mocked(api).mockImplementation(async (url, method = "GET") => {
     if (url === "/connections/1/tables") return ["things"] as never;
     if (url.includes("/schema/tables/things")) return schema as never;
     if (url.endsWith("/tables/things/object") && method === "GET") return objectDefinition as never;
+    if (url.endsWith("/tables/things/object") && method === "PUT" && objectSaveError)
+      throw new Error(objectSaveError);
     if (url.endsWith("/field-set-rules/validate") && method === "POST")
       return { message: "Field set rule formulas are valid." } as never;
     return undefined as never;
@@ -107,6 +109,26 @@ describe("Object field workflow", () => {
         ],
       }),
     ));
+  });
+
+  it("keeps an invalid set rule open and displays the save error", async () => {
+    mockApi(definition, "Unknown formula function Mystery.");
+    render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
+    await screen.findByText("varchar(100)");
+
+    fireEvent.click(screen.getByRole("button", { name: "Add set rule" }));
+    fireEvent.change(screen.getByLabelText("Set rule condition formula"), {
+      target: { value: "Mystery([title])" },
+    });
+    fireEvent.change(screen.getByLabelText("Set rule value formula"), {
+      target: { value: "'saved'" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save set rule" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Add field set rule" });
+    await waitFor(() => expect(dialog.querySelector('[role="alert"]')?.textContent)
+      .toContain("Unknown formula function Mystery."));
+    expect(screen.getByRole("dialog", { name: "Add field set rule" })).toBeTruthy();
   });
 
   it("preserves legacy datatype rules without offering datatype for new rules", async () => {

@@ -20,7 +20,7 @@ export function FieldSetRulesEditor({
   table: string;
   disabled?: boolean;
   change: (rules: FieldSetRule[]) => void;
-  save: (rules: FieldSetRule[]) => Promise<boolean>;
+  save: (rules: FieldSetRule[]) => Promise<string | null>;
 }) {
   const [draft, setDraft] = useState<(FieldSetRule & { index: number | null }) | null>(null);
   const [feedback, setFeedback] = useState<{ message: string; valid: boolean } | null>(null);
@@ -131,7 +131,9 @@ export function FieldSetRulesEditor({
               const next = draft.index == null ? [...value, rule] : value.map((candidate, index) => index === draft.index ? rule : candidate);
               setSaving(true);
               try {
-                if (await save(next)) setDraft(null);
+                const saveError = await save(next);
+                if (saveError) setFeedback({ message: saveError, valid: false });
+                else setDraft(null);
               } finally {
                 setSaving(false);
               }
