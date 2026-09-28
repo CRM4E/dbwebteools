@@ -92,6 +92,48 @@ describe("Record editor", () => {
     },
   );
 
+  it("applies required fields and dropdown values from the selected datatype", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    render(
+      <RecordEditor
+        columns={[
+          ...columns,
+          { name: "datatype", type: "varchar", nullable: false, primaryKey: false, generated: false, autoIncrement: false, default: null, canWrite: true },
+          { name: "code", type: "varchar", nullable: true, primaryKey: false, generated: false, autoIncrement: false, default: null },
+          { name: "status", type: "varchar", nullable: true, primaryKey: false, generated: false, autoIncrement: false, default: null },
+          { name: "acknowledged", type: "tinyint", nullable: false, primaryKey: false, generated: false, autoIncrement: false, default: null },
+        ]}
+        fields={[
+          { name: "datatype", label: "Data type", section: "", order: 1, hidden: false, readOnly: false, widget: "dropdown", options: [{ key: "standard", display: "Standard" }, { key: "strict", display: "Strict" }] },
+          { name: "code", label: "Code", section: "", order: 2, hidden: false, readOnly: false, widget: "text", dataTypeConstraints: [{ key: "standard", required: false, mask: null, enabledOptionKeys: null }, { key: "strict", required: true, mask: null, enabledOptionKeys: null }] },
+          { name: "status", label: "Status", section: "", order: 3, hidden: false, readOnly: false, widget: "dropdown", options: [{ key: "a", display: "Active" }, { key: "b", display: "Blocked" }], dataTypeConstraints: [{ key: "standard", required: false, mask: null, enabledOptionKeys: null }, { key: "strict", required: false, mask: null, enabledOptionKeys: ["a"] }] },
+          { name: "acknowledged", label: "Acknowledged", section: "", order: 4, hidden: false, readOnly: false, widget: "checkbox", dataTypeConstraints: [{ key: "standard", required: false, mask: null, enabledOptionKeys: null }, { key: "strict", required: true, mask: null, enabledOptionKeys: null }] },
+        ]}
+        row={{ values: { id: 1, name: "Existing", datatype: "standard", code: null, status: "b" }, version: "v1" }}
+        close={() => {}}
+        save={save}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Data type"), { target: { value: "strict" } });
+    expect((screen.getByLabelText("Code") as HTMLInputElement).required).toBe(true);
+    const status = screen.getByLabelText("Status") as HTMLSelectElement;
+    const acknowledged = screen.getByLabelText("Acknowledged") as HTMLInputElement;
+    expect(acknowledged.checked).toBe(false);
+    expect((status.querySelector('option[value="a"]') as HTMLOptionElement).disabled).toBe(false);
+    expect((status.querySelector('option[value="b"]') as HTMLOptionElement).disabled).toBe(true);
+
+    const form = screen.getByText("Save record").closest("form")!;
+    fireEvent.submit(form);
+    expect((await screen.findByRole("alert")).textContent).toContain("Code is required.");
+    fireEvent.change(screen.getByLabelText("Code"), { target: { value: "ready" } });
+    fireEvent.submit(form);
+    expect((await screen.findByRole("alert")).textContent).toContain("Status is not an enabled dropdown value.");
+    fireEvent.change(status, { target: { value: "a" } });
+    fireEvent.submit(form);
+    await waitFor(() => expect(save).toHaveBeenCalledWith({ datatype: "strict", code: "ready", status: "a", acknowledged: false }));
+  });
+
   it("omits generated primary keys and submits editable fields", async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     render(

@@ -374,8 +374,16 @@ public partial class DatabaseService(IDataProtectionProvider protection)
         if (input.Values == null)
             throw new ApiError(400, "Values object required.");
         var cols = await Columns(db, table);
-        if (input.Values.TryGetValue(DataTypeColumn.Name, out var requestedDataType))
-            DataTypeColumn.ValidateValue(requestedDataType, dataTypeKeys ?? []);
+        string? RequestedDataType()
+        {
+            if (!input.Values.TryGetValue(DataTypeColumn.Name, out var value))
+                return null;
+            DataTypeColumn.ValidateValue(value, dataTypeKeys ?? []);
+            return value.GetString();
+        }
+        var requestedDataTypeKey = RequestedDataType();
+        if (requestedDataTypeKey != null)
+            fields = DataTypeColumn.ApplyConstraints(fields ?? [], requestedDataTypeKey);
         if (operation == "create")
             ApplyCreationDefaults(fields ?? [], cols, input.Values);
         var plans = sumups ?? [];
@@ -429,9 +437,33 @@ public partial class DatabaseService(IDataProtectionProvider protection)
             current = existing[0];
             if (input.Version != Version(existing[0]))
                 throw new ApiError(409, "This record changed. Refresh before saving.");
+            fields = DataTypeColumn.ApplyConstraints(
+                fields ?? [],
+                requestedDataTypeKey
+                    ?? current.GetValueOrDefault(DataTypeColumn.Name) as string
+            );
         }
         if (operation != "delete")
         {
+            Dictionary<string, JsonElement> FinalValues()
+            {
+                var result = current?.ToDictionary(
+                    pair => pair.Key,
+                    pair => JsonSerializer.SerializeToElement(pair.Value)
+                ) ?? [];
+                foreach (var pair in input.Values)
+                    result[pair.Key] = pair.Value;
+                return result;
+            }
+            Dictionary<string, JsonElement> ConstraintValues(string? dataTypeKey) =>
+                current == null
+                || !string.Equals(
+                    dataTypeKey,
+                    current.GetValueOrDefault(DataTypeColumn.Name) as string,
+                    StringComparison.Ordinal
+                )
+                    ? FinalValues()
+                    : input.Values;
             foreach (
                 var field in (fields ?? []).Where(f => f.Widget == "lookup" && f.Lookup != null)
             )
@@ -453,9 +485,14 @@ public partial class DatabaseService(IDataProtectionProvider protection)
                 )
                     throw new ApiError(400, "This copied field is locked by its lookup mapping.");
             }
-            LayoutRules.ValidateDropdownValues(fields ?? [], input.Values);
+            var effectiveDataTypeKey = requestedDataTypeKey
+                ?? current?.GetValueOrDefault(DataTypeColumn.Name) as string;
+            LayoutRules.ValidateDropdownValues(
+                fields ?? [],
+                ConstraintValues(effectiveDataTypeKey)
+            );
             LayoutRules.ValidateEmailValues(fields ?? [], input.Values);
-            LayoutRules.ValidateMaskValues(fields ?? [], input.Values);
+            LayoutRules.ValidateMaskValues(fields ?? [], ConstraintValues(effectiveDataTypeKey));
             LayoutRules.ValidateRequiredValues(fields ?? [], input.Values, current);
             FieldSetRules.Apply(
                 fieldSetRules ?? [],
@@ -482,9 +519,16 @@ public partial class DatabaseService(IDataProtectionProvider protection)
                         );
                 }
             );
-            LayoutRules.ValidateDropdownValues(fields ?? [], input.Values);
+            var finalDataTypeKey = input.Values.TryGetValue(
+                DataTypeColumn.Name,
+                out var finalDataType
+            )
+                ? finalDataType.GetString()
+                : current?.GetValueOrDefault(DataTypeColumn.Name) as string;
+            fields = DataTypeColumn.ApplyConstraints(fields ?? [], finalDataTypeKey);
+            LayoutRules.ValidateDropdownValues(fields ?? [], ConstraintValues(finalDataTypeKey));
             LayoutRules.ValidateEmailValues(fields ?? [], input.Values);
-            LayoutRules.ValidateMaskValues(fields ?? [], input.Values);
+            LayoutRules.ValidateMaskValues(fields ?? [], ConstraintValues(finalDataTypeKey));
             LayoutRules.ValidateRequiredValues(fields ?? [], input.Values, current);
         }
         await CheckSumupParent(db, tx, plans, table, current, input, operation);

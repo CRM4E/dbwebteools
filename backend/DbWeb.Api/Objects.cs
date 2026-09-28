@@ -457,6 +457,22 @@ public static class ObjectModel
                             EnabledOptionKeys = setting.OverrideDropdownOptions
                                 ? setting.EnabledOptionKeys ?? []
                                 : null,
+                            DataTypeConstraints = definition.DataTypes!
+                                .Select(type =>
+                                {
+                                    var typeSetting = type.Fields.Single(candidate =>
+                                        candidate.Name.Equals(f.Name, StringComparison.OrdinalIgnoreCase)
+                                    );
+                                    return new DataTypeFieldConstraint(
+                                        type.Key,
+                                        typeSetting.Required,
+                                        typeSetting.Mask,
+                                        typeSetting.OverrideDropdownOptions
+                                            ? typeSetting.EnabledOptionKeys ?? []
+                                            : null
+                                    );
+                                })
+                                .ToList(),
                         };
                     }
                 )

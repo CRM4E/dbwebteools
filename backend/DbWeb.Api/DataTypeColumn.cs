@@ -35,6 +35,25 @@ public static class DataTypeColumn
             throw new ApiError(400, "Data type must be one of the configured values.");
     }
 
+    public static List<LayoutField> ApplyConstraints(
+        IEnumerable<LayoutField> fields,
+        string? dataTypeKey
+    ) =>
+        fields.Select(field =>
+        {
+            var constraint = field.DataTypeConstraints?.SingleOrDefault(candidate =>
+                candidate.Key.Equals(dataTypeKey, StringComparison.Ordinal)
+            );
+            return constraint == null
+                ? field
+                : field with
+                {
+                    Required = constraint.Required,
+                    Mask = constraint.Mask,
+                    EnabledOptionKeys = constraint.EnabledOptionKeys,
+                };
+        }).ToList();
+
     public static async Task ValidateExisting(
         MySqlConnection connection,
         DatabaseService service,

@@ -120,6 +120,12 @@ export type Field = {
   join?: Join | null;
   required?: boolean;
   enabledOptionKeys?: string[] | null;
+  dataTypeConstraints?: {
+    key: string;
+    required: boolean;
+    mask: InputMask | null;
+    enabledOptionKeys: string[] | null;
+  }[] | null;
   formula?: string | null;
 };
 export type ObjectField = Omit<
