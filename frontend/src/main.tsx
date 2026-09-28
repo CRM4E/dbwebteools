@@ -1604,6 +1604,7 @@ function Admin({
           if (active) {
             setFields([
               ...p.columns
+                .filter((c) => view === "permissions" || c.name.toLowerCase() !== "datatype")
                 .map(
                 (c, i) =>
                   s.fields.find((f) => f.name === c.name) || {
