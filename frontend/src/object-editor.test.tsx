@@ -78,6 +78,12 @@ describe("Object field workflow", () => {
     expect(screen.getByText("Field set rule saved.")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Add set rule" }));
+    const help = screen.getByLabelText("Field set rule formula help");
+    for (const name of ["Concat", "Upper", "Lower", "Trim", "Length", "Substring", "Replace", "Coalesce", "DropdownDisplay", "Round", "Abs", "Floor", "Ceiling", "Min", "Max", "if"]) {
+      expect(help.textContent).toContain(name);
+    }
+    expect(help.textContent).toContain("Condition formulas");
+    expect(help.textContent).toContain("Value formulas");
     expect(Array.from((screen.getByLabelText("Set rule field") as HTMLSelectElement).options)
       .map((option) => option.value)).toContain("datatype");
     expect((screen.getByRole("button", { name: "Save set rule" }) as HTMLButtonElement).disabled).toBe(true);

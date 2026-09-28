@@ -453,6 +453,19 @@ tbody tr:hover {
 .field-set-rules textarea {
   min-height: 84px;
 }
+.field-set-rules .formula-help {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #dfe7dc;
+  border-radius: 8px;
+  background: #f7faf6;
+}
+.field-set-rules .formula-help p {
+  margin: 0 0 8px;
+}
+.field-set-rules .formula-help p:last-child {
+  margin-bottom: 0;
+}
 .icon-btn {
   border: 0;
   background: transparent;
