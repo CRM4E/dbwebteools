@@ -949,6 +949,7 @@ test("data type rules block invalid creates and updates", async ({
     "pattern",
     "[A-Za-z][A-Za-z]\\x2d[0-9](?:[0-9])?",
   );
+  await dialog.getByLabel("note", { exact: true }).fill("CD-34");
   await dialog.getByLabel("title", { exact: true }).fill(" ");
   await dialog.getByRole("button", { name: "Save record" }).click();
   await expect(dialog.getByRole("alert")).toHaveText("title is required.");
