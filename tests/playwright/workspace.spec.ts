@@ -703,6 +703,7 @@ test("list columns and read-only joins refresh when a lookup changes", async ({
   expect((await mutation).postDataJSON().values).toEqual({
     title: "Joined browser order",
     person_id: "9007199254740993",
+    datatype: "default",
   });
   await expect(create).toHaveCount(0);
   const row = page.getByRole("row").filter({ hasText: "Joined browser order" });
@@ -922,6 +923,10 @@ test("data type rules block invalid creates and updates", async ({
     .selectOption("z_required_records");
   await page.getByRole("button", { name: "Add record", exact: true }).click();
   let dialog = page.getByRole("dialog");
+  const createDatatype = dialog.getByLabel("Data type", { exact: true });
+  await expect(createDatatype).toBeEnabled();
+  await expect(createDatatype.locator("option")).toHaveText(["Use database default", "Default", "Secondary"]);
+  await createDatatype.selectOption("secondary");
   await expect(dialog.getByText(/Required format: Format: AA-##\?/)).toBeVisible();
   const noteInput = dialog.getByLabel("note", { exact: true });
   await expect(noteInput).toHaveAttribute(
@@ -943,8 +948,12 @@ test("data type rules block invalid creates and updates", async ({
   const row = page
     .getByRole("row")
     .filter({ has: page.getByRole("cell", { name: title, exact: true }) });
+  await expect(row).toContainText("Secondary");
   await row.getByRole("button", { name: /Edit record/ }).click();
   dialog = page.getByRole("dialog");
+  const editDatatype = dialog.getByLabel("Data type", { exact: true });
+  await expect(editDatatype).toBeEnabled();
+  await editDatatype.selectOption("default");
   await dialog.getByLabel("title", { exact: true }).fill(" ");
   await dialog.getByRole("button", { name: "Save record" }).click();
   await expect(dialog.getByRole("alert")).toHaveText("title is required.");
