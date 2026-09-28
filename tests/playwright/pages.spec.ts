@@ -370,6 +370,7 @@ test("define pages and drill through related tabs with record keys and browser h
   await expect(panel.getByRole("columnheader")).toHaveText([
     "title",
     "amount",
+    "Data type",
     "Actions",
   ]);
   const relatedAddSize = await panel
@@ -451,7 +452,7 @@ test("define pages and drill through related tabs with record keys and browser h
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.getByRole("tab", { name: "Amounts", exact: true }).click();
   await expect(page.getByRole("tabpanel").getByRole("columnheader")).toHaveText(
-    ["amount", "Actions"],
+    ["amount", "Data type", "Actions"],
   );
   await page
     .getByRole("tab", { name: "Amounts", exact: true })

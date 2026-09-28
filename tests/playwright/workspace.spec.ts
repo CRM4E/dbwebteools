@@ -652,6 +652,7 @@ test("list columns and read-only joins refresh when a lookup changes", async ({
   await expect(page.getByRole("columnheader")).toHaveText([
     "Customer email",
     "title",
+    "Data type",
     "Actions",
   ]);
   await page.getByRole("button", { name: "Add record", exact: true }).click();
