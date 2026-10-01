@@ -36,6 +36,7 @@ export default defineConfig({
       env: {
         ASPNETCORE_ENVIRONMENT: "Development",
         Bootstrap__Password: "browser-test-only-password",
+        LoginRateLimit__PermitLimit: "100",
         DataDirectory: process.env.RUNNER_TEMP
           ? `${process.env.RUNNER_TEMP}/dbweb-browser`
           : "/tmp/dbweb-browser-data",
