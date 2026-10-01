@@ -69,4 +69,4 @@ jobs:
           context: .
           file: ${{ matrix.component }}/Dockerfile
           push: ${{ startsWith(github.ref, 'refs/tags/v') }}
-          tags: ghcr.io/${{ github.repository }}-${{ matrix.component }}:${{ github.sha }}
+          tags: ghcr.io/crm4e/dbwebteools-${{ matrix.component }}:${{ github.sha }}
