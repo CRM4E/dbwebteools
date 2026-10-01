@@ -90,7 +90,7 @@ builder.Services.AddRateLimiter(o =>
                 _ =>
                     new()
                     {
-                        PermitLimit = 10,
+                        PermitLimit = builder.Configuration.GetValue("LoginRateLimit:PermitLimit", 10),
                         Window = TimeSpan.FromMinutes(1),
                         QueueLimit = 0,
                     }
