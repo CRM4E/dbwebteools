@@ -27,18 +27,46 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Publish API
-        run: dotnet publish backend/DbWeb.Api/DbWeb.Api.csproj -c Release -r linux-x64 --self-contained true -o out/api
-
       - name: Build web frontend
         run: |
           npm --prefix frontend ci
           npm --prefix frontend run build
-          mkdir -p out/web
-          cp -R frontend/dist/. out/web/
+
+      - name: Publish self-contained application
+        run: |
+          dotnet publish backend/DbWeb.Api/DbWeb.Api.csproj -c Release -r linux-x64 --self-contained true -o out/app
+          mkdir -p out/app/wwwroot
+          cp -R frontend/dist/. out/app/wwwroot/
+
+      - name: Smoke-test published application
+        run: |
+          set -euo pipefail
+          test -x out/app/DbWeb.Api
+          test -f out/app/wwwroot/index.html
+          mkdir -p "${RUNNER_TEMP}/dbweb-candidate-data"
+          cd out/app
+          DataDirectory="${RUNNER_TEMP}/dbweb-candidate-data" \
+            Bootstrap__Password='candidate-smoke-only-password' \
+            ASPNETCORE_ENVIRONMENT=Development \
+            ASPNETCORE_URLS=http://127.0.0.1:5188 \
+            ./DbWeb.Api > "${RUNNER_TEMP}/dbweb-candidate.log" 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:5188/health > /dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:5188/ > "${RUNNER_TEMP}/dbweb-index.html"
+          cmp wwwroot/index.html "${RUNNER_TEMP}/dbweb-index.html"
+          curl --fail --silent http://127.0.0.1:5188/workspace > "${RUNNER_TEMP}/dbweb-deep-link.html"
+          cmp wwwroot/index.html "${RUNNER_TEMP}/dbweb-deep-link.html"
+          asset=$(find wwwroot/assets -maxdepth 1 -type f -name '*.js' -printf '%f\n' -quit)
+          test -n "$asset"
+          curl --fail --silent "http://127.0.0.1:5188/assets/$asset" > /dev/null
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:5188/api/unknown-route)" = 404
 
       - name: Package application
-        run: cd out && zip -r ../yourapp-linux-x64.zip api web
+        run: cd out/app && zip -r ../../yourapp-linux-x64.zip .
 
       - name: Delete candidateX release
         env:

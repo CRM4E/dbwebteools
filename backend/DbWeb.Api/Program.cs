@@ -157,6 +157,10 @@ app.Use(
         c.Response.Headers["X-Content-Type-Options"] = "nosniff";
         c.Response.Headers["X-Frame-Options"] = "DENY";
         c.Response.Headers["Referrer-Policy"] = "same-origin";
+        c.Response.Headers["Content-Security-Policy"] =
+            "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; "
+            + "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; "
+            + "frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
         c.Response.Headers.CacheControl = "no-store";
         try
         {
@@ -191,6 +195,8 @@ app.Use(
         }
     }
 );
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
@@ -1632,6 +1638,8 @@ admin.MapPost(
     }
 );
 PageEndpoints.Map(app);
+app.Map("/api/{**path}", () => Results.NotFound());
+app.MapFallbackToFile("index.html");
 app.Run();
 static void ValidateUser(UserInput i, bool create)
 {
