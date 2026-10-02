@@ -1,6 +1,6 @@
 # TableSpace — DbWebTools
 
-A responsive MariaDB record-management workspace with a separate **ASP.NET Core 9 API** and **React 19 + TypeScript + Vite frontend**.
+A responsive MariaDB record-management workspace with a separate **ASP.NET Core 10 API** and **React 19 + TypeScript + Vite frontend**.
 
 ## Features
 
@@ -16,7 +16,7 @@ A responsive MariaDB record-management workspace with a separate **ASP.NET Core 
 
 ## Quick start
 
-Install .NET SDK 9 and Node.js 22.12+ (or Node 24).
+Install .NET SDK 10 and Node.js 22.12+ (or Node 24).
 
 ```bash
 cp .env.example .env
@@ -28,6 +28,12 @@ docker compose up --build
 Open **http://localhost:8080** for local development. Sign in as `admin` with your configured bootstrap password. Add a connection in **Administration → Connections**; choose the database server hostname reachable from the API container (not `localhost` unless the DB runs in that container). Then browse records or configure users, table access, and editor layouts.
 
 For production, keep `APP_ENVIRONMENT=Production` and terminate HTTPS at a trusted reverse proxy in front of the loopback-bound web port. Production authentication cookies require HTTPS. Do not publish the API directly to the Internet. Back up the `app-data` volume, including encryption keys, and restrict access to it. Bootstrap settings are only used when there are no users; remove the bootstrap password after provisioning.
+
+### Self-contained Linux release (systemd)
+
+The `candidateX` release ZIP is a single `linux-x64` application directory. It includes the executable `DbWeb.Api` and the built frontend under `wwwroot/`; the API serves both `/api/` and the browser UI from the same origin. No .NET runtime or Node.js installation is required on the server. Extract the ZIP to a dedicated directory such as `/opt/dbwebteools` and run `DbWeb.Api` from that directory. Keep `DataDirectory` outside the release directory so upgrades do not remove SQLite metadata or data-protection keys.
+
+A systemd service should set `WorkingDirectory=/opt/dbwebteools` and `ExecStart=/opt/dbwebteools/DbWeb.Api`. Set `DataDirectory` to a writable persistent directory, `ASPNETCORE_URLS` to a loopback address behind your HTTPS reverse proxy, and `Bootstrap__Password` (14+ characters) only for first startup. For example, use a root-owned mode-0600 `EnvironmentFile` for the bootstrap password and remove it after the first administrator is created. Production cookies require browser access over HTTPS.
 
 ### Development without Docker
 
@@ -243,7 +249,7 @@ Object definitions drive application behavior; layouts supply labels, editor sec
 
 ## CI/CD and contributing
 
-Every pull request runs release builds, backend authorization/CSRF tests, frontend editor tests, and real MariaDB CRUD/concurrency validation. Successful builds upload separate deployment artifacts. Every PR also validates both container builds. A version tag (`v*`) validates first, then builds and publishes commit-SHA-tagged API/web images to GitHub Container Registry. No external production deployment target is assumed.
+Every pull request runs release builds, backend authorization/CSRF tests, frontend editor tests, and real MariaDB CRUD/concurrency validation. Successful builds upload separate deployment artifacts. Every PR also validates both container builds. Pushes to `main` run only the `candidateX` self-contained Linux release workflow; validation does not repeat after merge. Version tags (`v*`) publish API and web container images to GitHub Container Registry in a separate workflow. No external production deployment target is assumed.
 
 Use feature branches and pull requests for subsequent changes; never commit credentials or application data. Configure branch protection to require the `validate` job before merging.
 
