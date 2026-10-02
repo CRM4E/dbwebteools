@@ -2,6 +2,7 @@ name: Publish containers
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 permissions:
   contents: read
   packages: write

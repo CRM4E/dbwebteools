@@ -35,6 +35,7 @@ import {
   type PageSummary,
 } from "./api";
 import "./style.css";
+import { version as appVersion } from "../package.json";
 import { groupBySection, listColumns } from "./layout-fields";
 import { filterSummary } from "./list-view";
 import {
@@ -349,7 +350,7 @@ function App() {
           )}
         </div>
         <footer>
-          TableSpace <span>Purpose-built for your data.</span>
+          TableSpace <span>Purpose-built for your data. · v{appVersion}</span>
         </footer>
       </main>
     </div>
