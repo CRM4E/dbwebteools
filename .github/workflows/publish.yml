@@ -1,7 +1,7 @@
 name: publish-candidate
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main" ]
     paths-ignore:
       - '.github/**'      
 
@@ -21,9 +21,9 @@ jobs:
           fetch-depth: 0   # needed to create/move tags safely
 
       - uses: actions/setup-dotnet@v4
-        with: { dotnet-version: "8.0.x" }
+        with: { dotnet-version: "10.0.x" }
 
-      - run: dotnet publish "./WebAppGitHub.sln" -c Release -r linux-x64 --self-contained true -o out
+      - run: dotnet publish "./DbWeb.sln" -c Release -r linux-x64 --self-contained true -o out
       - run: cd out && zip -r ../yourapp-linux-x64.zip .
 
       - name: Delete candidateX release
