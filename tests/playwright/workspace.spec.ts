@@ -1,5 +1,9 @@
 import { expectDebouncedSearch } from "./search-debounce";
 import { test, expect } from "@playwright/test";
+import { readFileSync } from "node:fs";
+const { version: appVersion } = JSON.parse(
+  readFileSync(new URL("../../frontend/package.json", import.meta.url), "utf8"),
+);
 test("desktop and mobile workspace with administration", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -12,6 +16,7 @@ test("desktop and mobile workspace with administration", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Data browser", exact: true }),
   ).toBeVisible();
+  await expect(page.locator("main footer")).toContainText(`v${appVersion}`);
   await page.getByRole("button", { name: "Users & roles" }).click();
   await expect(
     page.getByRole("heading", { name: "Users & roles", exact: true }),

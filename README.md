@@ -31,7 +31,7 @@ For production, keep `APP_ENVIRONMENT=Production` and terminate HTTPS at a trust
 
 ### Self-contained Linux release (systemd)
 
-The `candidateX` release ZIP is a single `linux-x64` application directory. It includes the executable `DbWeb.Api` and the built frontend under `wwwroot/`; the API serves both `/api/` and the browser UI from the same origin. No .NET runtime or Node.js installation is required on the server. Extract the ZIP to a dedicated directory such as `/opt/dbwebteools` and run `DbWeb.Api` from that directory. Keep `DataDirectory` outside the release directory so upgrades do not remove SQLite metadata or data-protection keys.
+The `candidateX` release ZIP (also published under an immutable `v*` release tag) is a single `linux-x64` application directory. It includes the executable `DbWeb.Api` and the built frontend under `wwwroot/`; the API serves both `/api/` and the browser UI from the same origin. No .NET runtime or Node.js installation is required on the server. Extract the ZIP to a dedicated directory such as `/opt/dbwebteools` and run `DbWeb.Api` from that directory. Keep `DataDirectory` outside the release directory so upgrades do not remove SQLite metadata or data-protection keys.
 
 A systemd service should set `WorkingDirectory=/opt/dbwebteools` and `ExecStart=/opt/dbwebteools/DbWeb.Api`. Set `DataDirectory` to a writable persistent directory, `ASPNETCORE_URLS` to a loopback address behind your HTTPS reverse proxy, and `Bootstrap__Password` (14+ characters) only for first startup. For example, use a root-owned mode-0600 `EnvironmentFile` for the bootstrap password and remove it after the first administrator is created. Production cookies require browser access over HTTPS.
 
@@ -249,7 +249,7 @@ Object definitions drive application behavior; layouts supply labels, editor sec
 
 ## CI/CD and contributing
 
-Every pull request runs release builds, backend authorization/CSRF tests, frontend editor tests, and real MariaDB CRUD/concurrency validation. Successful builds upload separate deployment artifacts. Every PR also validates both container builds. Pushes to `main` run only the `candidateX` self-contained Linux release workflow; validation does not repeat after merge. Version tags (`v*`) publish API and web container images to GitHub Container Registry in a separate workflow. No external production deployment target is assumed.
+Every pull request runs release builds, backend authorization/CSRF tests, frontend editor tests, and real MariaDB CRUD/concurrency validation. Successful builds upload separate deployment artifacts. Every PR also validates both container builds. Pushes to `main` run only the self-contained Linux release workflow; validation does not repeat after merge. Each successful release increments the frontend patch version, commits it to `main`, creates an immutable `v*` tag and release, and refreshes the `candidateX` alias. The authenticated UI displays this version. The version tag dispatches the separate API/web container publishing workflow. No external production deployment target is assumed.
 
 Use feature branches and pull requests for subsequent changes; never commit credentials or application data. Configure branch protection to require the `validate` job before merging.
 
