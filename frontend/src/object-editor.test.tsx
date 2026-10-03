@@ -38,6 +38,30 @@ function mockApi(objectDefinition: unknown = definition, objectSaveError?: strin
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("Object field workflow", () => {
+  it("shows id before datatype after creating a new table", async () => {
+    vi.mocked(api).mockImplementation(async (url, method = "GET") => {
+      if (url === "/connections/1/tables") return [] as never;
+      if (url === "/admin/connections/1/schema/tables" && method === "POST") return schema as never;
+      if (url.endsWith("/schema/tables/things")) return schema as never;
+      if (url.endsWith("/tables/things/object")) return {
+        ...definition,
+        fields: [...definition.fields].reverse(),
+        dataTypes: [{ key: "default", label: "Default", fields: [] }],
+        defaultDataTypeKey: "default",
+      } as never;
+      return undefined as never;
+    });
+    render(<ObjectEditor connections={[{ id: 1, name: "Local" } as never]} onChanged={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "New table" }));
+    fireEvent.change(screen.getByLabelText("New table name"), { target: { value: "things" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create table" }));
+    await screen.findByText("varchar(100)");
+
+    const rows = Array.from(screen.getByRole("region", { name: "Object definition" })
+      .querySelectorAll("tbody tr"));
+    expect(rows.slice(0, 3).map((row) => row.querySelector("td")?.textContent?.trim()))
+      .toEqual(["id", "datatype Managed", "title"]);
+  });
   it("loads, edits, orders, deletes, and saves field set rules", async () => {
     mockApi({
       ...definition,

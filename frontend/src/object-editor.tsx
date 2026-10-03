@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import {
   api,
   type Column,
@@ -389,6 +389,43 @@ export function ObjectEditor({
       ?.focus();
     return () => previous?.focus();
   }, [fieldDialogOpen]);
+  const managedColumn = schema?.columns.find((column) => column.name === "datatype");
+  const managedDataTypeRow = dataTypes.length > 0 ? (
+    <tr key="datatype">
+      <td>
+        datatype <span className="badge">Managed</span>
+      </td>
+      <td>
+        <strong>{managedColumn?.sqlType || "varchar(64)"}</strong>
+        <small className="muted database-field-details">
+          {managedColumn
+            ? "Required in database"
+            : "Provisioned when object settings are saved"}
+        </small>
+      </td>
+      <td>Data type</td>
+      <td>Yes</td>
+      <td>
+        <select
+          aria-label="datatype default value"
+          value={defaultDataTypeKey}
+          disabled={busy || objectLoading}
+          onChange={(event) =>
+            void saveDataTypes(dataTypes, event.target.value)
+          }
+        >
+          {dataTypes.map((dataType) => (
+            <option key={dataType.key} value={dataType.key}>
+              {dataType.label}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td>
+        <small className="muted">Managed by Data Types.</small>
+      </td>
+    </tr>
+  ) : null;
   return (
     <div className="object-editor">
       <div className="heading">
@@ -993,48 +1030,7 @@ export function ObjectEditor({
                     </tr>
                   </thead>
                   <tbody>
-                    {dataTypes.length > 0 && (() => {
-                      const managedColumn = schema.columns.find(
-                        (column) => column.name === "datatype",
-                      );
-                      return (
-                        <tr key="datatype">
-                          <td>
-                            datatype <span className="badge">Managed</span>
-                          </td>
-                          <td>
-                            <strong>{managedColumn?.sqlType || "varchar(64)"}</strong>
-                            <small className="muted database-field-details">
-                              {managedColumn
-                                ? "Required in database"
-                                : "Provisioned when object settings are saved"}
-                            </small>
-                          </td>
-                          <td>Data type</td>
-                          <td>Yes</td>
-                          <td>
-                            <select
-                              aria-label="datatype default value"
-                              value={defaultDataTypeKey}
-                              disabled={busy || objectLoading}
-                              onChange={(event) =>
-                                void saveDataTypes(dataTypes, event.target.value)
-                              }
-                            >
-                              {dataTypes.map((dataType) => (
-                                <option key={dataType.key} value={dataType.key}>
-                                  {dataType.label}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                          <td>
-                            <small className="muted">Managed by Data Types.</small>
-                          </td>
-                        </tr>
-                      );
-                    })()}
-                    {objectFields.map((field) => {
+                    {[...objectFields].sort((a, b) => Number(b.name === "id") - Number(a.name === "id")).map((field, index) => {
                       const column = columns.find((c) => c.name === field.name);
                       const schemaColumn = schema.columns.find(
                         (c) => c.name === field.name,
@@ -1043,7 +1039,8 @@ export function ObjectEditor({
                         field.widget,
                       );
                       return (
-                        <tr key={field.name}>
+                        <Fragment key={field.name}>
+                        <tr>
                           <td>
                             {field.name}
                             {virtual && <span className="badge">Virtual</span>}
@@ -1124,8 +1121,11 @@ export function ObjectEditor({
                             </div>
                           </td>
                         </tr>
+                        {index === 0 && managedDataTypeRow}
+                        </Fragment>
                       );
                     })}
+                    {objectFields.length === 0 && managedDataTypeRow}
                   </tbody>
                 </table>
               </div>
